@@ -480,7 +480,6 @@
         });
     }
 
-    // Master Admin Connect Function
     async function adminConnectDevice() {
       if (!channel) {
         await setupChannel(true);
@@ -490,7 +489,6 @@
       addLog('CMD_SENT: ADMIN_START_STREAM dispatched.', 'text-emerald-300');
     }
 
-    // Master Admin Disconnect Function
     function adminDisconnectDevice() {
       sendAdminCommand('ADMIN_STOP_STREAM');
       if (peerConnection) {
@@ -607,7 +605,6 @@
       document.getElementById('sbUrl').value = saved.url || DEFAULT_SUPABASE_URL;
       document.getElementById('sbKey').value = saved.key || DEFAULT_SUPABASE_KEY;
       document.getElementById('roomId').value = saved.room || DEFAULT_ROOM_ID;
-      // Auto-connect to Supabase channel on page load
       setupChannel(false);
     };
   </script>
