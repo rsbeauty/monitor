@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Android Live Screen Monitor - Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    body {
+      background-color: #060b19;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    .panel-card {
+      background: linear-gradient(145deg, #0c1428 0%, #091020 100%);
+      border: 1px solid #1e293b;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .glow-green {
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+    }
+    .glow-red {
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
+    }
+    /* Custom scrollbar for logs */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen flex overflow-x-hidden">
+
+  <!-- Left Vertical Navigation Sidebar -->
+  <aside class="w-16 bg-[#080e1e] border-r border-slate-800/80 flex flex-col items-center py-4 justify-between shrink-0">
+    <div class="flex flex-col items-center gap-6">
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl">
+        <i class="fa-brands fa-android"></i>
+      </div>
+      <nav class="flex flex-col gap-4 text-slate-400">
+        <button title="Dashboard" class="w-10 h-10 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center">
+          <i class="fa-solid fa-table-cells-large"></i>
+        </button>
+        <button title="Devices" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
+          <i class="fa-solid fa-mobile-screen"></i>
+        </button>
+        <button title="Users" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
+          <i class="fa-solid fa-users"></i>
+        </button>
+        <button title="Recordings" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
+          <i class="fa-solid fa-video"></i>
+        </button>
+        <button title="Settings" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </nav>
+    </div>
+    <div class="flex flex-col gap-4 text-slate-500">
+      <button title="Help" class="w-9 h-9 rounded-full border border-slate-700 hover:text-white flex items-center justify-center">
+        <i class="fa-solid fa-question text-xs"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 p-4 flex flex-col gap-4 max-w-[1600px] mx-auto">
+
+    <!-- Top Header & Admin Handshake Controls -->
+    <header class="panel-card rounded-2xl p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-3">
+          <h1 class="text-lg md:text-xl font-bold tracking-wide text-cyan-400">
+            ANDROID LIVE SCREEN MONITOR
+          </h1>
+          <span id="connBadge" class="text-xs px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">
+            Standby / Offline
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div id="liveIndicator" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-bold">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            ((• LIVE •))
+          </div>
+        </div>
+      </div>
+
+      <!-- Inputs & Admin Master Connect/Disconnect Buttons -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-3">
+          <label class="block text-[11px] text-slate-400 mb-1">Supabase Project URL</label>
+          <input id="sbUrl" type="text" placeholder="https://xyz.supabase.co"
+            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="block text-[11px] text-slate-400 mb-1">Supabase Anon Key</label>
+          <input id="sbKey" type="password" placeholder="••••••••••••••••••••"
+            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-[11px] text-slate-400 mb-1">Room ID</label>
+          <input id="roomId" type="text" value="device_1"
+            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
+        </div>
+
+        <!-- Admin Handshake Master Control Buttons -->
+        <div class="md:col-span-4 flex flex-col">
+          <span class="text-[11px] text-emerald-400 font-semibold mb-1 text-center">Admin Handshake Control</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="adminConnectDevice()" id="btnConnect"
+              class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition glow-green flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-plug"></i> CONNECT DEVICE
+            </button>
+            <button onclick="adminDisconnectDevice()" id="btnDisconnect"
+              class="bg-red-600/90 hover:bg-red-500 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition glow-red flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-power-off"></i> DISCONNECT DEVICE
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main 3-Column Dashboard Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+
+      <!-- COLUMN 1: Live Mobile Screen Player (4 Cols) -->
+      <section class="lg:col-span-4 panel-card rounded-2xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+          <span>Mobile Screen Stream</span>
+          <span id="streamTimer" class="font-mono text-cyan-400">00:00:00</span>
+        </div>
+
+        <!-- Phone Bezel Frame -->
+        <div class="relative mx-auto bg-black rounded-[2rem] border-[4px] border-slate-700 overflow-hidden shadow-2xl flex items-center justify-center w-full max-w-[270px]"
+             style="aspect-ratio: 9/19;">
+          <video id="remoteVideo" autoplay playsinline muted onclick="handleScreenClick(event)"
+            class="w-full h-full object-contain cursor-crosshair"></video>
+
+          <!-- Overlay Placeholder when offline -->
+          <div id="screenPlaceholder" class="absolute inset-0 bg-[#050811] flex flex-col items-center justify-center p-5 text-center">
+            <div class="w-14 h-14 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-cyan-400 text-2xl mb-3">
+              <i class="fa-solid fa-mobile-screen-button"></i>
+            </div>
+            <p class="text-xs font-semibold text-slate-300">Waiting for Admin Command</p>
+            <p class="text-[11px] text-slate-500 mt-1">Click <span class="text-emerald-400 font-semibold">CONNECT DEVICE</span> above to wake & start stream.</p>
+          </div>
+
+          <!-- Bottom Mirroring Status Tag -->
+          <div class="absolute bottom-2 inset-x-2 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 flex items-center justify-between text-[10px]">
+            <span class="text-emerald-400 font-medium flex items-center gap-1">
+              <i class="fa-solid fa-shield-halved"></i> MIRRORING (Admin Lock)
+            </span>
+            <span id="overlayTime" class="text-slate-400 font-mono">LIVE</span>
+          </div>
+        </div>
+
+        <!-- Bottom Player Controls -->
+        <div class="mt-4">
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="toggleFullscreen()"
+              class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-expand text-cyan-400"></i> Fullscreen
+            </button>
+            <button onclick="sendAdminCommand('REFRESH_STREAM')"
+              class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-rotate text-emerald-400"></i> Refresh Stream
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- COLUMN 2: Analytics Charts & Diagnostic Control Buttons (5 Cols) -->
+      <section class="lg:col-span-5 flex flex-col gap-4">
+
+        <!-- Charts Card -->
+        <div class="panel-card rounded-2xl p-4">
+          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Diagnostic & Stream Analytics</h2>
+
+          <!-- Bar Chart -->
+          <div class="mb-4">
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>Frame Packet Rate (fps/s)</span>
+              <span class="text-emerald-400">● Optimal</span>
+            </div>
+            <div class="h-28 bg-[#060b19] rounded-xl p-2 border border-slate-800">
+              <canvas id="barChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Line Chart -->
+          <div>
+            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>Network Bitrate Throughput (kbps)</span>
+              <span class="text-purple-400">● WebRTC P2P</span>
+            </div>
+            <div class="h-28 bg-[#060b19] rounded-xl p-2 border border-slate-800">
+              <canvas id="lineChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Remote Control Grid (8 Buttons from Image) -->
+        <div class="panel-card rounded-2xl p-4 flex-1">
+          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Remote Admin Actions</h2>
+          <div class="grid grid-cols-2 gap-2.5">
+
+            <button onclick="adminDisconnectDevice()"
+              class="bg-red-950/60 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-circle-xmark text-red-400"></i>
+              <span>Force System Disconnect</span>
+            </button>
+
+            <button onclick="takeScreenshot()"
+              class="bg-blue-950/60 hover:bg-blue-900/70 border border-blue-500/50 text-blue-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-camera text-blue-400"></i>
+              <span>Take Screenshot</span>
+            </button>
+
+            <button onclick="sendAdminCommand('REMOTE_RECONNECT')"
+              class="bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/50 text-amber-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
+              <span>Remote Reconnect</span>
+            </button>
+
+            <button onclick="sendAdminCommand('RESTART_APP')"
+              class="bg-slate-800/80 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-power-off text-cyan-400"></i>
+              <span>Restart Client App</span>
+            </button>
+
+            <button onclick="sendAdminCommand('REINIT_CAPTURE')"
+              class="bg-yellow-950/50 hover:bg-yellow-900/60 border border-yellow-500/50 text-yellow-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-display text-yellow-400"></i>
+              <span>Re-init Screen Capture</span>
+            </button>
+
+            <button onclick="toggleTouchMode()" id="btnTouchSim"
+              class="bg-indigo-950/60 hover:bg-indigo-900/70 border border-indigo-500/50 text-indigo-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-hand-pointer text-indigo-400"></i>
+              <span>Simulate Touch: OFF</span>
+            </button>
+
+            <button onclick="toggleBlockInput()" id="btnBlockInput"
+              class="bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/50 text-rose-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-lock text-rose-400"></i>
+              <span>Block User Touch</span>
+            </button>
+
+            <button onclick="sendAdminCommand('HEALTH_CHECK')"
+              class="bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/50 text-emerald-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
+              <i class="fa-solid fa-heart-pulse text-emerald-400"></i>
+              <span>Check Stream Health</span>
+            </button>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- COLUMN 3: Device Telemetry Sidebar & Accessibility Event Log (3 Cols) -->
+      <section class="lg:col-span-3 flex flex-col gap-4">
+
+        <!-- Rich Sidebar Statistics -->
+        <div class="panel-card rounded-2xl p-4">
+          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Device Statistics</h2>
+          <div class="space-y-3">
+
+            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">Connection Quality</p>
+                <p id="statQuality" class="text-sm font-bold text-emerald-400">98% (Excellent)</p>
+              </div>
+              <i class="fa-solid fa-signal text-emerald-400 text-lg"></i>
+            </div>
+
+            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">Framerate</p>
+                <p id="statFps" class="text-sm font-bold text-cyan-400">15 fps</p>
+              </div>
+              <i class="fa-solid fa-gauge-high text-cyan-400 text-lg"></i>
+            </div>
+
+            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">Bitrate</p>
+                <p id="statBitrate" class="text-sm font-bold text-blue-400">1.2 Mbps</p>
+              </div>
+              <i class="fa-solid fa-wave-square text-blue-400 text-lg"></i>
+            </div>
+
+            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">Device Model</p>
+                <p id="statModel" class="text-sm font-bold text-slate-200">Android Device</p>
+              </div>
+              <i class="fa-solid fa-mobile text-slate-400 text-lg"></i>
+            </div>
+
+            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <p class="text-[11px] text-slate-400">Latency</p>
+                <p id="statLatency" class="text-sm font-bold text-amber-400">28 ms</p>
+              </div>
+              <i class="fa-solid fa-bolt text-amber-400 text-lg"></i>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Accessibility Key Event Log -->
+        <div class="panel-card rounded-2xl p-4 flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Accessibility Event Log</h2>
+            <button onclick="clearLogs()" class="text-[10px] text-slate-400 hover:text-white">Clear</button>
+          </div>
+          <div id="eventLogBox"
+            class="flex-1 bg-[#050811] border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-emerald-400 overflow-y-auto max-h-56 space-y-1">
+            <div class="text-slate-500">[SYSTEM] Admin panel initialized...</div>
+            <div class="text-slate-500">[LOCK] Client self-disconnect disabled.</div>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <script>
+    let supabaseClient = null;
+    let channel = null;
+    let peerConnection = null;
+    let simulateTouchEnabled = false;
+    let blockUserInputEnabled = false;
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    function addLog(msg, color = 'text-emerald-400') {
+      const box = document.getElementById('eventLogBox');
+      const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+      const line = document.createElement('div');
+      line.className = color;
+      line.textContent = `[${time}] ${msg}`;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('eventLogBox').innerHTML = '';
+    }
+
+    function startTimer() {
+      stopTimer();
+      secondsElapsed = 0;
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
+        const secs = String(secondsElapsed % 60).padStart(2, '0');
+        document.getElementById('streamTimer').textContent = `${hrs}:${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      document.getElementById('streamTimer').textContent = '00:00:00';
+    }
+
+    function setLiveUI(isLive) {
+      const badge = document.getElementById('connBadge');
+      const liveInd = document.getElementById('liveIndicator');
+      const placeholder = document.getElementById('screenPlaceholder');
+
+      if (isLive) {
+        badge.textContent = 'Active / Admin Connected';
+        badge.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-semibold';
+        liveInd.classList.remove('hidden');
+        liveInd.classList.add('flex');
+        placeholder.classList.add('hidden');
+        startTimer();
+      } else {
+        badge.textContent = 'Disconnected by Admin';
+        badge.className = 'text-xs px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-medium';
+        liveInd.classList.add('hidden');
+        liveInd.classList.remove('flex');
+        placeholder.classList.remove('hidden');
+        stopTimer();
+      }
+    }
+
+    function initPeerConnection() {
+      if (peerConnection) peerConnection.close();
+      peerConnection = new RTCPeerConnection(rtcConfig);
+
+      peerConnection.ontrack = (event) => {
+        const video = document.getElementById('remoteVideo');
+        video.srcObject = event.streams[0];
+        setLiveUI(true);
+        addLog('STREAM_CONNECTED: Live video feed received.', 'text-cyan-400');
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate && channel) {
+          channel.send({
+            type: 'broadcast',
+            event: 'ice-viewer',
+            payload: { candidate: event.candidate.toJSON() }
+          });
+        }
+      };
+    }
+
+    // Master Admin Connect Function
+    async function adminConnectDevice() {
+      const url = document.getElementById('sbUrl').value.trim();
+      const key = document.getElementById('sbKey').value.trim();
+      const room = document.getElementById('roomId').value.trim();
+
+      if (!url || !key || !room) {
+        alert('Please enter Supabase URL, Anon Key, and Room ID');
+        return;
+      }
+
+      localStorage.setItem('admin_screen_cfg', JSON.stringify({ url, key, room }));
+      addLog(`ADMIN_HANDSHAKE: Connecting to room "${room}"...`, 'text-amber-400');
+
+      supabaseClient = supabase.createClient(url, key);
+      if (channel) await supabaseClient.removeChannel(channel);
+
+      initPeerConnection();
+      channel = supabaseClient.channel(`screen-room-${room}`);
+
+      channel
+        .on('broadcast', { event: 'offer' }, async ({ payload }) => {
+          addLog('OFFER_RECEIVED: Establishing WebRTC tunnel...', 'text-cyan-400');
+          initPeerConnection();
+          await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: payload.sdp }));
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+
+          channel.send({
+            type: 'broadcast',
+            event: 'answer',
+            payload: { sdp: answer.sdp }
+          });
+        })
+        .on('broadcast', { event: 'ice-android' }, async ({ payload }) => {
+          if (payload && peerConnection) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate({
+              sdpMid: payload.sdpMid,
+              sdpMLineIndex: payload.sdpMLineIndex,
+              candidate: payload.candidate
+            }));
+          }
+        })
+        .on('broadcast', { event: 'device-telemetry' }, ({ payload }) => {
+          if (payload.model) document.getElementById('statModel').textContent = payload.model;
+          if (payload.log) addLog(payload.log, 'text-emerald-400');
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            // Send Admin Start Command to Android App
+            sendAdminCommand('ADMIN_START_STREAM');
+            addLog('CMD_SENT: ADMIN_START_STREAM dispatched.', 'text-emerald-300');
+          }
+        });
+    }
+
+    // Master Admin Disconnect Function
+    function adminDisconnectDevice() {
+      sendAdminCommand('ADMIN_STOP_STREAM');
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      const video = document.getElementById('remoteVideo');
+      video.srcObject = null;
+      setLiveUI(false);
+      addLog('ADMIN_DISCONNECT: Stream terminated by Admin.', 'text-red-400');
+    }
+
+    function sendAdminCommand(cmd, extraData = {}) {
+      if (!channel) {
+        addLog('ERROR: Connect channel first.', 'text-red-400');
+        return;
+      }
+      channel.send({
+        type: 'broadcast',
+        event: 'admin-command',
+        payload: { command: cmd, ...extraData }
+      });
+      addLog(`CMD_DISPATCHED: ${cmd}`, 'text-amber-300');
+    }
+
+    function takeScreenshot() {
+      const video = document.getElementById('remoteVideo');
+      if (!video.srcObject) return alert('No active stream to capture.');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 720;
+      canvas.height = video.videoHeight || 1280;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const link = document.createElement('a');
+      link.download = `screen_${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      addLog('SCREENSHOT_SAVED: Downloaded PNG snapshot.', 'text-blue-400');
+    }
+
+    function toggleTouchMode() {
+      simulateTouchEnabled = !simulateTouchEnabled;
+      const btn = document.getElementById('btnTouchSim');
+      btn.innerHTML = simulateTouchEnabled
+        ? '<i class="fa-solid fa-hand-pointer text-emerald-400"></i><span>Simulate Touch: ON</span>'
+        : '<i class="fa-solid fa-hand-pointer text-indigo-400"></i><span>Simulate Touch: OFF</span>';
+      addLog(`TOUCH_SIMULATION: ${simulateTouchEnabled ? 'ENABLED' : 'DISABLED'}`, 'text-indigo-300');
+    }
+
+    function handleScreenClick(event) {
+      if (!simulateTouchEnabled) return;
+      const rect = event.target.getBoundingClientRect();
+      const normX = ((event.clientX - rect.left) / rect.width).toFixed(3);
+      const normY = ((event.clientY - rect.top) / rect.height).toFixed(3);
+      sendAdminCommand('REMOTE_TAP', { x: normX, y: normY });
+      addLog(`TOUCH_EVENT (${normX}, ${normY})`, 'text-cyan-300');
+    }
+
+    function toggleBlockInput() {
+      blockUserInputEnabled = !blockUserInputEnabled;
+      const btn = document.getElementById('btnBlockInput');
+      btn.innerHTML = blockUserInputEnabled
+        ? '<i class="fa-solid fa-lock text-red-400"></i><span>Device Input: LOCKED</span>'
+        : '<i class="fa-solid fa-lock text-rose-400"></i><span>Block User Touch</span>';
+      sendAdminCommand(blockUserInputEnabled ? 'LOCK_DEVICE_TOUCH' : 'UNLOCK_DEVICE_TOUCH');
+    }
+
+    function toggleFullscreen() {
+      const video = document.getElementById('remoteVideo');
+      if (video.requestFullscreen) video.requestFullscreen();
+    }
+
+    // Initialize Analytics Charts
+    function initCharts() {
+      const labels = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+
+      new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: [12, 14, 15, 13, 15, 15, 14, 15, 15],
+            backgroundColor: '#10b981',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
+          }
+        }
+      });
+
+      new Chart(document.getElementById('lineChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: [950, 1100, 1250, 1180, 1400, 1320, 1210, 1290, 1350],
+            borderColor: '#a855f7',
+            backgroundColor: 'rgba(168, 85, 247, 0.15)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+            y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
+          }
+        }
+      });
+    }
+
+    window.onload = () => {
+      initCharts();
+      const saved = JSON.parse(localStorage.getItem('admin_screen_cfg') || '{}');
+      if (saved.url) document.getElementById('sbUrl').value = saved.url;
+      if (saved.key) document.getElementById('sbKey').value = saved.key;
+      if (saved.room) document.getElementById('roomId').value = saved.room;
+    };
+  </script>
+</body>
+</html>
