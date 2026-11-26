@@ -11,8 +11,7 @@ class BootReceiver : BroadcastReceiver() {
             intent.action == "android.intent.action.QUICKBOOT_POWERON"
         ) {
             val prefs = context.getSharedPreferences("admin_lock_prefs", Context.MODE_PRIVATE)
-            val isPaired = prefs.getBoolean("is_paired_lifetime", false)
-            if (isPaired) {
+            if (prefs.getBoolean("is_paired_lifetime", false)) {
                 val serviceIntent = Intent(context, ScreenShareService::class.java).apply {
                     action = "BOOT_STANDBY"
                 }

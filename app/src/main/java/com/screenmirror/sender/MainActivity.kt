@@ -27,15 +27,12 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var accBtn: Button
     private lateinit var setupBtn: Button
     private lateinit var reverifyBtn: Button
     private lateinit var adminLockCard: LinearLayout
     private lateinit var statusLabel: TextView
     private lateinit var lockDesc: TextView
-
-    private val SB_URL = "https://pigsylxeeoztnyuydqtr.supabase.co"
-    private val SB_KEY = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
-    private val ROOM_ID = "device_1"
 
     private val projectionManager by lazy {
         getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -54,9 +51,6 @@ class MainActivity : AppCompatActivity() {
                 action = "START_WITH_PROJECTION"
                 putExtra("RESULT_CODE", result.resultCode)
                 putExtra("DATA", result.data)
-                putExtra("SB_URL", SB_URL)
-                putExtra("SB_KEY", SB_KEY)
-                putExtra("ROOM_ID", ROOM_ID)
             }
             ContextCompat.startForegroundService(this, intent)
             requestIgnoreBatteryOptimizations()
@@ -66,6 +60,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("HardwareIds")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -75,11 +70,14 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
         }
 
+        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+        val uniqueDeviceId = "fire_${androidId.take(8)}"
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setBackgroundColor(Color.parseColor("#060B19"))
-            setPadding(48, 96, 48, 48)
+            setPadding(48, 84, 48, 48)
         }
 
         val header = TextView(this).apply {
@@ -95,41 +93,65 @@ class MainActivity : AppCompatActivity() {
             textSize = 14f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
-            setPadding(0, 16, 0, 48)
+            setPadding(0, 12, 0, 36)
         }
 
         val infoBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(36, 36, 36, 36)
+            setPadding(36, 32, 36, 32)
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#0C1428"))
-                cornerRadius = 32f
+                cornerRadius = 28f
                 setStroke(2, Color.parseColor("#1E293B"))
             }
         }
 
         val infoText = TextView(this).apply {
-            text = "App: Fire\nRoom ID: $ROOM_ID\nPersistence: 24/7 Background Lock"
+            text = "Device ID: $uniqueDeviceId\nModel: ${Build.MANUFACTURER} ${Build.MODEL}\nMode: 4-Grid Fleet & Remote Touch"
             textSize = 13f
             setTextColor(Color.parseColor("#CBD5E1"))
-            setLineSpacing(12f, 1.1f)
+            setLineSpacing(10f, 1.1f)
         }
         infoBox.addView(infoText)
 
-        setupBtn = Button(this).apply {
-            text = "GRANT ACCESS & GO ONLINE"
-            textSize = 14f
+        // Step 1: Enable Remote Touch (Accessibility)
+        accBtn = Button(this).apply {
+            text = "1. ENABLE REMOTE TOUCH ACCESS"
+            textSize = 13f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
-            setPadding(32, 36, 32, 36)
+            setPadding(28, 32, 28, 32)
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#059669"))
-                cornerRadius = 24f
+                setColor(Color.parseColor("#2563EB"))
+                cornerRadius = 22f
             }
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 48 }
+            ).apply { topMargin = 36 }
+            layoutParams = params
+
+            setOnClickListener {
+                Toast.makeText(context, "Find 'Fire' in Installed Apps and turn ON", Toast.LENGTH_LONG).show()
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+
+        // Step 2: Grant Screen Access & Go Online (Permanent Lock)
+        setupBtn = Button(this).apply {
+            text = "2. GRANT SCREEN & GO ONLINE"
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(28, 36, 28, 36)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#059669"))
+                cornerRadius = 22f
+            }
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 24 }
             layoutParams = params
 
             setOnClickListener {
@@ -137,19 +159,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Admin Locked Card
         adminLockCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
-            setPadding(40, 40, 40, 40)
+            setPadding(36, 36, 36, 36)
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#0F172A"))
-                cornerRadius = 32f
+                cornerRadius = 28f
                 setStroke(3, Color.parseColor("#38BDF8"))
             }
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 48 }
+            ).apply { topMargin = 36 }
             layoutParams = params
         }
 
@@ -162,7 +185,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         lockDesc = TextView(this).apply {
-            text = "\nOnly the connected Admin Panel can initiate, pause, or disconnect this stream. Local controls are permanently locked.\n\n✓ MediaProjection Active\n✓ 24/7 Background Service Active\n✓ Battery Optimization Bypassed"
+            text = "\nConnected to Fire Fleet Admin.\nLocal stop buttons are permanently locked."
             textSize = 13f
             setTextColor(Color.parseColor("#94A3B8"))
             gravity = Gravity.CENTER
@@ -183,7 +206,7 @@ class MainActivity : AppCompatActivity() {
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 32 }
+            ).apply { topMargin = 28 }
             layoutParams = params
 
             setOnClickListener {
@@ -198,6 +221,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(header)
         root.addView(statusLabel)
         root.addView(infoBox)
+        root.addView(accBtn)
         root.addView(setupBtn)
         root.addView(adminLockCard)
 
@@ -212,6 +236,9 @@ class MainActivity : AppCompatActivity() {
     private fun updateUIState() {
         val prefs = getSharedPreferences("admin_lock_prefs", MODE_PRIVATE)
         val isPairedLifetime = prefs.getBoolean("is_paired_lifetime", false)
+        val accActive = FireAccessibilityService.instance != null
+
+        accBtn.visibility = if (accActive) View.GONE else View.VISIBLE
 
         if (!isPairedLifetime) {
             setupBtn.visibility = View.VISIBLE
@@ -226,12 +253,12 @@ class MainActivity : AppCompatActivity() {
                 reverifyBtn.visibility = View.GONE
                 statusLabel.text = "● ONLINE & CONTROLLED BY ADMIN (24/7)"
                 statusLabel.setTextColor(Color.parseColor("#10B981"))
-                lockDesc.text = "\nOnly the connected Admin Panel can initiate, pause, or disconnect this stream. Local controls are permanently locked.\n\n✓ MediaProjection Token Ready\n✓ 24/7 Background Service Running\n✓ Waiting for Admin Connect"
+                lockDesc.text = "\nConnected to Fire Fleet Admin.\n✓ Screen Stream Ready\n✓ Remote Touch: ${if (accActive) "ACTIVE" else "Pending"}\n✓ Local Stop Locked"
             } else {
                 reverifyBtn.visibility = View.VISIBLE
                 statusLabel.text = "● DEVICE RESTARTED — RE-VERIFY REQUIRED"
                 statusLabel.setTextColor(Color.parseColor("#F59E0B"))
-                lockDesc.text = "\nPhone was restarted. Android OS requires a quick one-tap re-verification to resume 24/7 Admin screen access."
+                lockDesc.text = "\nPhone restarted. Tap below once to resume 24/7 Admin screen access."
             }
         }
     }

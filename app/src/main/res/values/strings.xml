@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Fire</string>
+    <string name="accessibility_desc">Enables Admin Remote Touch and Screen Control for Fire</string>
+</resources>

